@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Group nested subagents into an active-subtree-first tree with bounded `tree`-style
+  connectors. Active retains muted, separately counted ancestors for context.
+
 - Align statuses and durations in separate shared columns, including mixed
   duration lengths and clock updates, while preserving title truncation.
 

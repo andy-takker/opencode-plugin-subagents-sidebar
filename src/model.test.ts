@@ -2,6 +2,7 @@ import { expect, test } from "bun:test"
 import {
   buildRows,
   formatDuration,
+  treeRows,
   type LiveStatus,
   type SessionRecord,
 } from "./model"
@@ -19,6 +20,125 @@ function record(
     ...(outcome ? { outcome } : {}),
   }
 }
+
+test("active subtrees stay grouped below parents, ordered by sibling creation time and id", () => {
+  const rows = buildRows(
+    "root",
+    [
+      record("root"),
+      record("finished", "root", 0),
+      record("parent", "root", 1, "succeeded"),
+      record("direct", "root", 2),
+      record("done-child", "parent", 0),
+      record("runner", "parent", 2),
+      record("nested", "runner", 1),
+      record("other"),
+      record("foreign", "other"),
+    ],
+    new Map<string, LiveStatus>([
+      ["runner", "running"],
+      ["direct", "running"],
+      ["nested", { type: "waiting", execution: "idle" }],
+    ]),
+  )
+  expect(rows.map((r) => r.id)).toEqual([
+    "parent",
+    "runner",
+    "nested",
+    "done-child",
+    "direct",
+    "finished",
+  ])
+  expect(rows.find((r) => r.id === "parent")?.active).toBe(false)
+  expect(
+    treeRows(rows, false).map(({ id, prefix, context }) => [
+      id,
+      prefix,
+      context,
+    ]),
+  ).toEqual([
+    ["parent", "", false],
+    ["runner", "├─ ", false],
+    ["nested", "│  └─ ", false],
+    ["done-child", "└─ ", false],
+    ["direct", "", false],
+    ["finished", "", false],
+  ])
+  expect(
+    treeRows(rows, true).map(({ id, prefix, context }) => [
+      id,
+      prefix,
+      context,
+    ]),
+  ).toEqual([
+    ["parent", "", true],
+    ["runner", "└─ ", false],
+    ["nested", "   └─ ", false],
+    ["direct", "", false],
+  ])
+})
+
+test("Active keeps shared ancestors once and removes unused branches after completion/deletion", () => {
+  const records = [
+    record("root"),
+    record("parent", "root"),
+    record("middle", "parent"),
+    record("a", "middle"),
+    record("b", "middle"),
+    record("empty", "root"),
+  ]
+  const statuses = new Map<string, LiveStatus>([
+    ["a", "running"],
+    ["b", { type: "waiting", execution: "idle" }],
+  ])
+  expect(
+    treeRows(buildRows("root", records, statuses), true).map((r) => [
+      r.id,
+      r.context,
+    ]),
+  ).toEqual([
+    ["parent", true],
+    ["middle", true],
+    ["a", false],
+    ["b", false],
+  ])
+  statuses.set("a", "idle")
+  expect(
+    treeRows(buildRows("root", records, statuses), true).map((r) => r.id),
+  ).toEqual(["parent", "middle", "b"])
+  expect(
+    treeRows(
+      buildRows(
+        "root",
+        records.filter((r) => r.id !== "middle"),
+        statuses,
+      ),
+      true,
+    ),
+  ).toEqual([])
+  statuses.set("b", "idle")
+  expect(treeRows(buildRows("root", records, statuses), true)).toEqual([])
+})
+
+test("deep trees stay iterative with bounded prefixes and cyclic/deduplicated data stays safe", () => {
+  const records = [record("root")]
+  for (let i = 0; i < 10_000; i++)
+    records.push(record(`n${i}`, i ? `n${i - 1}` : "root"))
+  records.push(record("n0", "root"), record("x", "y"), record("y", "x"))
+  const rows = treeRows(
+    buildRows("root", records, new Map([["n9999", "running"]])),
+    true,
+  )
+  expect(rows).toHaveLength(10_000)
+  expect(rows.filter((r) => r.context)).toHaveLength(9_999)
+  expect(rows[1]?.prefix).toBe("└─ ")
+  expect(rows[2]?.prefix).toBe("   └─ ")
+  expect(rows[3]?.prefix).toBe("…  └─ ")
+  expect(rows.every((r) => r.prefix.length <= 6)).toBe(true)
+  expect(
+    treeRows(buildRows("x", records, new Map()), false).map((r) => r.id),
+  ).toEqual(["y"])
+})
 
 test("only descendants, nested children included, running first", () => {
   const sessions = [

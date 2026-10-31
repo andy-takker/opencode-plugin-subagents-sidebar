@@ -39,8 +39,10 @@ These instructions apply to the entire repository and to all coding agents.
   `src/tui.tsx` responsible for presentation and navigation.
 - Use official public V2 API types and theme tokens. Do not rely on private
   host internals, hardcoded credentials, or a separately authenticated client.
-- Preserve complete paginated tree discovery, nested descendants, active-first
-  deterministic ordering, cycle guards, and bounded request concurrency.
+- Preserve complete paginated tree discovery, nested descendants, active-subtree-first
+  deterministic sibling ordering, parent-before-child grouping, cycle guards,
+  and bounded request concurrency. Active includes separately counted inactive
+  ancestors for context; those ancestors must not inflate active counts.
 - Running overrides a previous outcome; idle alone never proves success.
   Request failures must not become empty results or idle/success states.
 - Preserve generation/invalidation guards, deletion tombstones, event-driven

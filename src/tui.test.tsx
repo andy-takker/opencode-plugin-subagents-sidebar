@@ -15,6 +15,105 @@ async function clickText(
   await screen.mockMouse.click((lines[y]?.indexOf(text) ?? 0) + 1, y)
 }
 
+test("tree connectors preserve ancestry in Active, with distinct context counts and correct clicks", async () => {
+  const parent = {
+    ...session("parent", "root"),
+    title: "Research",
+    outcome: "succeeded" as const,
+  }
+  const api = { ...session("api", "parent"), title: "API" }
+  const tests = { ...session("tests", "api"), title: "Tests" }
+  const docs = {
+    ...session("docs", "parent"),
+    title: "Docs",
+    outcome: "succeeded" as const,
+  }
+  const f = contextFixture([
+    session("root"),
+    parent,
+    api,
+    tests,
+    docs,
+    session("other", "root"),
+  ])
+  f.sessionAPI.active = async () => ({ api: { type: "running" } })
+  f.forms.push(form("tests"))
+  const [id, setId] = createSignal("root")
+  await using screen = await testRender(
+    () => <Sidebar context={f.context} sessionID={id()} />,
+    { width: 28, height: 14 },
+  )
+  await clickText(screen, "▶ Subagents")
+  const all = await screen.waitForFrame((frame) => frame.includes("Docs"))
+  expect(all).toContain("├─ API")
+  expect(all).toContain("│  └─ Tests")
+  expect(all).toContain("└─ Docs")
+  expect(all.indexOf("Research")).toBeLessThan(all.indexOf("API"))
+  const reads = [f.requests.length, f.attentionRequests.length]
+  await clickText(screen, "Active (2)")
+  const active = await screen.waitForFrame((frame) =>
+    frame.includes("+ 1 context (·)"),
+  )
+  expect(active).toContain("· Research")
+  expect(active).toContain("└─ API")
+  expect(active).toContain("   └─ Tests")
+  expect(active).not.toContain("Docs")
+  expect(active).not.toContain("other")
+  expect([f.requests.length, f.attentionRequests.length]).toEqual(reads)
+  await clickText(screen, "· Research")
+  await clickText(screen, "└─ Tests")
+  expect(f.routes).toEqual([
+    { type: "session", sessionID: "parent" },
+    { type: "session", sessionID: "tests" },
+  ])
+  setId("tests")
+  await screen.waitForFrame((frame) => frame.includes("+ 1 context (·)"))
+  f.sessionAPI.active = async () => ({})
+  f.emit({ id: "finished", type: "server.connected", data: {} })
+  const partial = await screen.waitForFrame((frame) =>
+    frame.includes("+ 2 context (·)"),
+  )
+  expect(partial).toContain("[Active (1)]")
+  expect(partial).toContain("└─ · API")
+  f.forms.length = 0
+  f.emit({ id: "resolved", type: "server.connected", data: {} })
+  const empty = await screen.waitForFrame((frame) =>
+    frame.includes("No active subagents"),
+  )
+  expect(empty).not.toContain("context")
+  expect(empty).not.toContain("Research")
+  await clickText(screen, "All (5)")
+  expect(
+    await screen.waitForFrame((frame) => frame.includes("Docs")),
+  ).toContain("├─ API")
+})
+
+test("deep Unicode trees bound the connector width and keep context and active rows clickable", async () => {
+  const records = [session("root")]
+  for (let i = 0; i < 6; i++)
+    records.push({
+      ...session(`n${i}`, i ? `n${i - 1}` : "root"),
+      title: "Исследование 界界 👩‍💻".repeat(8),
+    })
+  const f = contextFixture(records)
+  f.sessionAPI.active = async () => ({ n5: { type: "running" } })
+  await using screen = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 14 },
+  )
+  await clickText(screen, "▶ Subagents")
+  await clickText(screen, "Active (1)")
+  const frame = await screen.waitForFrame((frame) =>
+    frame.includes("+ 5 context (·)"),
+  )
+  expect(frame).toContain("…  └─ · ")
+  expect(frame).toContain("Running —")
+  expect(screen.renderer.root.getChildren()[0]?.width).toBeLessThanOrEqual(28)
+  const y = frame.split("\n").findIndex((line) => line.includes("Running"))
+  await screen.mockMouse.click(1, y)
+  expect(f.routes).toEqual([{ type: "session", sessionID: "n5" }])
+})
+
 test.each([28, 40])(
   "status columns align across durations and clock ticks at width %d",
   async (width) => {

@@ -41,7 +41,7 @@ Research API            Done
 
 - Counts keep updating while collapsed. The expanded/collapsed choice survives
   navigation for this plugin context; restarting OpenCode or reloading the plugin resets it.
-- Running tasks appear first; finished tasks stay visible.
+- Branches containing Running/Waiting tasks appear first; finished tasks stay visible.
 - Navigating into a child keeps the same tree. Switching roots changes the list.
 - Restores existing tasks, follows lifecycle events, and uses your current theme.
 - Text statuses: `Running`, `Done`, `Error`, `Interrupted`, `Idle`, `Unknown`.
@@ -59,10 +59,12 @@ Review changes       Running
 ```
 
 Click **All** to show the complete history (the default), or **Active** to show
-`Running` and `Waiting` tasks. Brackets mark the selected mode. The header always counts
-all subagents; each filter shows its matching count, so the selected count is
-the number of visible rows. Tasks disappear from Active when they finish and have no pending request,
-and remain accessible through All. No active tasks shows `No active subagents`;
+`Running` and `Waiting` tasks, plus their ancestors for context. Brackets mark the
+selected mode. The header always counts all subagents; Active counts only active
+tasks. Additional inactive ancestors are marked `·`, use muted titles and are
+counted separately on a `+ N context (·)` line. They keep their real status and
+remain clickable. Finished tasks disappear from Active unless needed as an
+ancestor, and remain accessible through All. No active tasks shows `No active subagents`;
 a completely empty tree shows `No subagents` in either mode.
 
 Filtering is local and never pauses synchronization, including while collapsed.
@@ -70,12 +72,38 @@ The choice survives session/root navigation and sidebar remounts in the same
 plugin context; restarting OpenCode or reloading the plugin resets it to All.
 These features are not in the v0.1.0 release archive or demo above.
 
+### Nested task tree (unreleased)
+
+Parents precede their children, with connectors like the `tree` utility:
+
+```text
+Research       Done     3m37s
+├─ API         Running    42s
+│  └─ Tests    Waiting  1m05s
+└─ Docs        Done       25s
+```
+
+Among siblings, branches containing any Running/Waiting task come first, then
+creation time and session ID break ties. Each subtree stays together; an inactive
+parent can therefore precede its active descendants. Direct children of the
+current root have no connector, and the current root itself is not a row.
+
+Active retains each necessary ancestor once, hides inactive sibling branches and
+redraws connectors for the filtered tree. Its visible row count is the active
+count plus the separate context count. A finished parent with no active descendant
+disappears from Active. Filtering remains local and preserves click targets.
+
+Connectors occupy at most six columns. At depths beyond two nested levels, `…`
+replaces the earlier path (`…  └─`); it does not mean nodes were omitted. Status
+and duration columns remain aligned while long task names truncate. Navigating
+into a child retains the same root tree. This feature is not in v0.1.0 or the demo.
+
 ### Attention and errors (unreleased)
 
 `Waiting` means the server confirms an unanswered permission request or form for
 that subagent. It takes precedence over Running and previous terminal outcomes;
 Running also overrides a previous error. Idle alone never means waiting or stuck.
-Waiting and Running share the existing active-first, creation-time ordering.
+Waiting and Running both give their branch priority in the tree ordering.
 
 When attention is needed, the collapsed section adds a compact summary:
 
