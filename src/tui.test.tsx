@@ -59,6 +59,11 @@ test("tree connectors preserve ancestry in Active, with distinct context counts 
   expect(active).toContain("   └─ Tests")
   expect(active).not.toContain("Docs")
   expect(active).not.toContain("other")
+  const parentSpan = screen
+    .captureSpans()
+    .lines.flatMap((line) => line.spans)
+    .find((span) => span.text.includes("Research"))
+  expect(parentSpan?.fg.equals(f.context.theme.text.muted)).toBe(true)
   expect([f.requests.length, f.attentionRequests.length]).toEqual(reads)
   await clickText(screen, "· Research")
   await clickText(screen, "└─ Tests")
@@ -66,8 +71,21 @@ test("tree connectors preserve ancestry in Active, with distinct context counts 
     { type: "session", sessionID: "parent" },
     { type: "session", sessionID: "tests" },
   ])
+  const gate = Promise.withResolvers<void>()
+  const get = f.sessionAPI.get
+  f.sessionAPI.get = async (input) => {
+    if (input.sessionID === "tests") await gate.promise
+    return get(input)
+  }
   setId("tests")
-  await screen.waitForFrame((frame) => frame.includes("+ 1 context (·)"))
+  await screen.waitForFrame((frame) => frame.includes("Loading…"))
+  gate.resolve()
+  const navigated = await screen.waitForFrame((frame) =>
+    frame.includes("+ 1 context (·)"),
+  )
+  expect(navigated).toContain("Subagents · 5")
+  expect(navigated).toContain("· Research")
+  expect(navigated).toContain("   └─ Tests")
   f.sessionAPI.active = async () => ({})
   f.emit({ id: "finished", type: "server.connected", data: {} })
   const partial = await screen.waitForFrame((frame) =>
@@ -89,11 +107,19 @@ test("tree connectors preserve ancestry in Active, with distinct context counts 
 })
 
 test("deep Unicode trees bound the connector width and keep context and active rows clickable", async () => {
+  using clock = displayClock(10_000_000)
   const records = [session("root")]
   for (let i = 0; i < 6; i++)
     records.push({
       ...session(`n${i}`, i ? `n${i - 1}` : "root"),
       title: "Исследование 界界 👩‍💻".repeat(8),
+      ...(i === 1
+        ? {
+            outcome: "interrupted" as const,
+            time: { created: 1, updated: 1, busy: 1, idle: 3_600_001 },
+          }
+        : {}),
+      ...(i === 5 ? { time: { created: 1, updated: 1, busy: 9_400_000 } } : {}),
     })
   const f = contextFixture(records)
   f.sessionAPI.active = async () => ({ n5: { type: "running" } })
@@ -107,7 +133,23 @@ test("deep Unicode trees bound the connector width and keep context and active r
     frame.includes("+ 5 context (·)"),
   )
   expect(frame).toContain("…  └─ · ")
-  expect(frame).toContain("Running —")
+  expect(frame).toMatch(/Running\s+10m00s/)
+  expect(frame).toMatch(/Interrupted\s+1h00m/)
+  const lines = frame
+    .split("\n")
+    .filter((line) => /Idle|Interrupted|Running/.test(line))
+  expect(lines).toHaveLength(6)
+  expect(
+    new Set(
+      lines.map((line) =>
+        Bun.stringWidth(line.slice(0, line.search(/Idle|Interrupted|Running/))),
+      ),
+    ).size,
+  ).toBe(1)
+  expect(new Set(lines.map((line) => Bun.stringWidth(line.trimEnd())))).toEqual(
+    new Set([28]),
+  )
+  expect(clock.active).toBe(1)
   expect(screen.renderer.root.getChildren()[0]?.width).toBeLessThanOrEqual(28)
   const y = frame.split("\n").findIndex((line) => line.includes("Running"))
   await screen.mockMouse.click(1, y)
