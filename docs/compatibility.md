@@ -44,3 +44,25 @@ Lifecycle transitions, reconnect, deletion races, narrow Unicode layout and
 dispose are covered automatically. Interactive failure/interruption and real
 network reconnection have not been exercised; do not treat unit tests as those
 manual checks.
+
+## 2026-10-31 v0.2.0 verification
+
+The release preparation passes 126 tests (395 assertions), strict types,
+recommended lint, formatting, a frozen install and the exact archive allowlist
+check. Feature PRs #12–#18 passed Linux/macOS CI, including artifact round trips.
+
+On macOS arm64, OpenCode 2.2.5 loaded the v0.2.0 archive extracted outside the
+checkout with no package-local `node_modules`. The collapsed count and expanded
+All list restored nine completed tasks with aligned statuses and frozen durations.
+`/subagents` opened the chooser; searching and pressing Enter opened the host's
+child-session viewer, and Escape returned to the parent. A recent CLI log-tail
+check found no error entries referencing that extracted package; this is not a
+claim that every host log was error-free.
+
+Prior feature smoke checks also exercised a real Running clock and Active
+filtering, the palette command with the sidebar hidden, cancellation and focus
+restoration. Nested-tree layout and confirmed Waiting transitions are covered by
+typed integration and real OpenTUI renderer tests, not by a live human permission
+flow in this release smoke check. The README GIF uses demonstration fixtures in
+Warp with the actual plugin components; it is a UI demonstration, not host
+compatibility evidence. Windows and a Linux host runtime remain unverified.

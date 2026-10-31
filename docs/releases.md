@@ -1,6 +1,8 @@
 # Releases
 
-GitHub **v0.1.0** is the first release; the npm package is not yet published.
+GitHub **v0.1.0** was the first release; **v0.2.0** adds the complete task tree,
+attention states, filtering, durations and keyboard navigation. Check the npm
+registry independently: creating a GitHub release does not establish npm availability.
 Publishing a GitHub release triggers verification. npm publishing is opt-in:
 the publish job runs only when the repository Actions variable
 `NPM_PUBLISH_ENABLED` is exactly `true`. Leave it unset for GitHub-only releases.
