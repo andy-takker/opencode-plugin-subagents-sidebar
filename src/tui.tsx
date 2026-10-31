@@ -1,4 +1,5 @@
 import { Plugin } from "@opencode/plugin/tui"
+import type { KeyEvent } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import {
   createEffect,
@@ -277,14 +278,268 @@ export function Sidebar(props: {
   )
 }
 
+function SubagentPicker(props: {
+  context: Plugin.Context
+  sessionID: string
+  isOpen: () => boolean
+  close: () => void
+}): JSX.Element {
+  const [view, setView] = createSignal<View>({ phase: "loading", rows: [] })
+  const [query, setQuery] = createSignal("")
+  const [selected, setSelected] = createSignal<string>()
+  const [opening, setOpening] = createSignal(false)
+  const [message, setMessage] = createSignal("")
+  const source = createOpenCodeSource(props.context)
+  let revision = 0
+  let selectionRevision = 0
+  let disposed = false
+  const controller = createController(
+    {
+      ...source,
+      subscribe(listener) {
+        return source.subscribe((change) => {
+          revision++
+          listener(change)
+        })
+      },
+    },
+    setView,
+  )
+  const rows = createMemo(() =>
+    treeRows(view().rows, false).filter((row) =>
+      row.title.toLowerCase().includes(query().trim().toLowerCase()),
+    ),
+  )
+  const index = () =>
+    Math.max(
+      0,
+      rows().findIndex((row) => row.id === selected()),
+    )
+  const [now, setNow] = createSignal(Date.now())
+  createEffect(() => {
+    if (view().phase !== "ready") return
+    const visible = rows()
+    setNow(Date.now())
+    if (!visible.some((row) => row.duration && row.duration.end === undefined))
+      return
+    const timer = setInterval(() => setNow(Date.now()), 1_000)
+    onCleanup(() => clearInterval(timer))
+  })
+  createEffect(() => {
+    if (selected() === undefined && rows().length) setSelected(rows()[0]?.id)
+  })
+  const current = () => {
+    const route = props.context.ui.router.current()
+    return (
+      !disposed &&
+      props.isOpen() &&
+      route.type === "session" &&
+      route.sessionID === props.sessionID
+    )
+  }
+  createEffect(() => {
+    if (!current()) props.close()
+  })
+  void controller.select(props.sessionID)
+  onCleanup(() => {
+    disposed = true
+    controller.dispose()
+  })
+  function select(id: string | undefined) {
+    selectionRevision++
+    setSelected(id)
+  }
+  function handleKeyDown(event: KeyEvent) {
+    if (event.name === "escape") {
+      event.preventDefault()
+      props.close()
+    }
+    if (event.name === "return" || event.name === "linefeed") {
+      event.preventDefault()
+      void choose()
+    }
+    if (event.name === "up" || event.name === "down") {
+      event.preventDefault()
+      const next = Math.max(
+        0,
+        Math.min(rows().length - 1, index() + (event.name === "up" ? -1 : 1)),
+      )
+      select(rows()[next]?.id)
+    }
+  }
+  async function choose() {
+    const id = selected()
+    if (!current() || opening()) return
+    if (view().phase === "error") {
+      setMessage("")
+      await controller.refresh()
+      return
+    }
+    if (view().phase !== "ready" || !id) return
+    if (!rows().some((row) => row.id === id)) {
+      setMessage("Selection changed. Use arrows to select a task.")
+      return
+    }
+    const version = revision
+    const selectionVersion = selectionRevision
+    setOpening(true)
+    setMessage("")
+    try {
+      const record = await source.get(id)
+      if (!current()) return
+      if (
+        record.id !== id ||
+        version !== revision ||
+        selectionVersion !== selectionRevision ||
+        !view().rows.some((row) => row.id === id)
+      ) {
+        setMessage("List changed. Select again.")
+        return
+      }
+      props.close()
+      props.context.ui.router.navigate({ type: "session", sessionID: id })
+    } catch {
+      if (current()) {
+        setMessage("Unable to open subagent. Select again to retry.")
+        void controller.refresh()
+      }
+    } finally {
+      if (current()) setOpening(false)
+    }
+  }
+  return (
+    <box
+      width="100%"
+      flexDirection="column"
+      padding={1}
+      gap={1}
+      backgroundColor={props.context.theme.background.raised.base}
+    >
+      <text fg={props.context.theme.text.base}>
+        <b>Open subagent</b>
+      </text>
+      <input
+        focused
+        placeholder="Search task titles…"
+        textColor={props.context.theme.text.base}
+        focusedTextColor={props.context.theme.text.base}
+        backgroundColor={props.context.theme.background.raised.high}
+        focusedBackgroundColor={props.context.theme.background.raised.high}
+        onInput={(value) => {
+          setQuery(value)
+          select(undefined)
+        }}
+        onSubmit={() => {
+          void choose()
+        }}
+        onKeyDown={handleKeyDown}
+      />
+      <Switch>
+        <Match when={view().phase === "loading"}>
+          <text>Loading subagents…</text>
+        </Match>
+        <Match when={view().phase === "error"}>
+          <text>Unable to load subagents. Enter to retry.</text>
+        </Match>
+        <Match when={view().phase === "ready" && !rows().length}>
+          <text>
+            {view().rows.length ? "No matching subagents" : "No subagents"}
+          </text>
+        </Match>
+        <Match when={view().phase === "ready" && rows().length}>
+          <select
+            height={Math.min(10, rows().length * 2)}
+            width="100%"
+            options={rows().map((row) => ({
+              name: `${row.prefix}${row.title.replace(/[\r\n\t]/g, " ")}`,
+              description: `${row.status} · ${formatDuration(row.duration, now())}`,
+              value: row.id,
+            }))}
+            selectedIndex={index()}
+            onKeyDown={(event) => {
+              // Keep both focus targets on the same ID-based selection path.
+              // Native select bindings otherwise maintain a separate index.
+              event.preventDefault()
+              handleKeyDown(event)
+            }}
+            textColor={props.context.theme.text.base}
+            descriptionColor={props.context.theme.text.muted}
+            selectedTextColor={props.context.theme.text.base}
+            selectedDescriptionColor={props.context.theme.text.base}
+            backgroundColor={props.context.theme.background.raised.base}
+            selectedBackgroundColor={props.context.theme.background.raised.max}
+            onSelect={() => void choose()}
+          />
+        </Match>
+      </Switch>
+      <Show when={message()}>
+        <text fg={props.context.theme.text.feedback.warning.base}>
+          {message()}
+        </text>
+      </Show>
+      <text fg={props.context.theme.text.muted}>
+        {opening() ? "Opening…" : "↑/↓ select · Enter open/retry · Esc cancel"}
+      </text>
+    </box>
+  )
+}
+
 export default Plugin.define({
   id: "opencode.subagents-sidebar",
   setup(context) {
-    return context.ui.slot({
+    let disposed = false
+    let closePicker: (() => void) | undefined
+    context.keymap.layer(() => ({
+      mode: "global",
+      commands: [
+        {
+          id: "opencode.subagents-sidebar.open",
+          title: "Open subagent",
+          group: "Subagents",
+          palette: true,
+          slash: { name: "subagents" },
+          enabled: () =>
+            !disposed && context.ui.router.current().type === "session",
+          run() {
+            const route = context.ui.router.current()
+            if (disposed || route.type !== "session") return
+            closePicker?.()
+            let open = true
+            const close = () => {
+              if (open) {
+                open = false
+                context.ui.dialog.clear()
+              }
+            }
+            closePicker = close
+            context.ui.dialog.show(
+              () => (
+                <SubagentPicker
+                  context={context}
+                  sessionID={route.sessionID}
+                  isOpen={() => open}
+                  close={close}
+                />
+              ),
+              () => {
+                open = false
+              },
+            )
+            context.ui.dialog.set({ size: "large" })
+          },
+        },
+      ],
+    }))
+    const removeSlot = context.ui.slot({
       append: "sidebar.content",
       render: (props) => (
         <Sidebar context={context} sessionID={props.sessionID} />
       ),
     })
+    return () => {
+      disposed = true
+      closePicker?.()
+      removeSlot()
+    }
   },
 })

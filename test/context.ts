@@ -98,6 +98,13 @@ export function contextFixture(
       },
     },
     theme: {
+      background: {
+        raised: {
+          base: RGBA.fromHex("#222222"),
+          high: RGBA.fromHex("#333333"),
+          max: RGBA.fromHex("#444444"),
+        },
+      },
       text: {
         base: color,
         muted: RGBA.fromHex("#888888"),
