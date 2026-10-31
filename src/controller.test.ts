@@ -21,14 +21,17 @@ function fixture(records = [session("root"), session("child", "root")]) {
   let listener: (change: Change) => void = () => {}
   const views: View[] = []
   const status = new Map<string, LiveStatus>()
+  const calls = { get: [] as string[], children: 0, statuses: 0 }
   let stops = 0
   const source: Source = {
     async get(id) {
+      calls.get.push(id)
       const result = records.find((r) => r.id === id)
       if (!result) throw new Error("not found")
       return result
     },
     async children(id, cursor) {
+      calls.children++
       const children = records.filter((r) => r.parentID === id)
       const offset = Number(cursor ?? 0)
       return {
@@ -37,6 +40,7 @@ function fixture(records = [session("root"), session("child", "root")]) {
       }
     },
     async statuses(ids) {
+      calls.statuses++
       return new Map(ids.map((id) => [id, status.get(id) ?? "idle"]))
     },
     subscribe(fn) {
@@ -54,11 +58,227 @@ function fixture(records = [session("root"), session("child", "root")]) {
     controller,
     views,
     status,
+    calls,
     emit: (change: Change) => listener(change),
     stops: () => stops,
     last: () => views.at(-1),
   }
 }
+
+// All fixture I/O resolves as microtasks; an event-loop turn drains event work
+// without adding a timing assumption or a test-only controller API.
+const settleEvents = () => new Promise<void>((resolve) => setImmediate(resolve))
+
+test("unrelated bursts resolve ancestry once without reloading the visible tree", async () => {
+  const f = fixture([
+    session("root"),
+    session("child", "root"),
+    session("other"),
+    session("outside", "other"),
+  ])
+  await f.controller.select("root")
+  const before = { ...f.calls, get: [...f.calls.get] }
+  for (let i = 0; i < 100; i++) f.emit({ kind: "refresh", id: "outside" })
+  await settleEvents()
+  expect(f.calls.get.slice(before.get.length)).toEqual(["outside", "other"])
+  expect(f.calls.children).toBe(before.children)
+  expect(f.calls.statuses).toBe(before.statuses)
+  for (let i = 0; i < 100; i++) f.emit({ kind: "refresh", id: "outside" })
+  f.emit({ kind: "delete", id: "outside" })
+  await settleEvents()
+  expect(f.calls.get.slice(before.get.length)).toEqual(["outside", "other"])
+  expect(f.calls.children).toBe(before.children)
+  expect(f.last()?.rows.map((row) => row.id)).toEqual(["child"])
+  f.controller.dispose()
+})
+
+test("created parent hints ignore unrelated roots and discover nested children", async () => {
+  const f = fixture()
+  await f.controller.select("root")
+  const before = f.calls.children
+  f.emit({ kind: "created", id: "other" })
+  f.emit({ kind: "created", id: "outside", parentID: "other" })
+  await settleEvents()
+  expect(f.calls.children).toBe(before)
+  f.records.push(session("nested", "child"), session("deep", "nested"))
+  f.emit({ kind: "created", id: "nested", parentID: "child" })
+  f.emit({ kind: "created", id: "deep", parentID: "nested" })
+  await settleEvents()
+  expect(f.last()?.rows.map((row) => row.id)).toEqual([
+    "child",
+    "deep",
+    "nested",
+  ])
+  f.controller.dispose()
+})
+
+test("unknown relevant ancestry and failed lookups conservatively reconcile", async () => {
+  const f = fixture()
+  await f.controller.select("root")
+  f.records.push(session("parent", "child"), session("new", "parent"))
+  f.emit({ kind: "refresh", id: "new" })
+  await settleEvents()
+  expect(f.last()?.rows.map((row) => row.id)).toEqual([
+    "child",
+    "new",
+    "parent",
+  ])
+  f.records.push(session("missed", "root"))
+  f.emit({ kind: "refresh", id: "temporarily-unavailable" })
+  await settleEvents()
+  expect(f.last()?.rows.map((row) => row.id)).toContain("missed")
+  f.controller.dispose()
+})
+
+test("unrelated events cannot invalidate an in-flight visible snapshot", async () => {
+  const f = fixture()
+  await f.controller.select("root")
+  f.emit({ kind: "created", id: "other" })
+  await settleEvents()
+  const pending = deferred<ReadonlyMap<string, LiveStatus>>()
+  const entered = deferred<void>()
+  f.source.statuses = () => {
+    entered.resolve()
+    return pending.promise
+  }
+  const load = f.controller.refresh()
+  await entered.promise
+  const reads = f.calls.children
+  for (let i = 0; i < 100; i++) f.emit({ kind: "refresh", id: "other" })
+  pending.resolve(new Map([["child", "running"]]))
+  await load
+  expect(f.calls.children).toBe(reads)
+  expect(f.last()?.rows[0]?.status).toBe("Running")
+  f.controller.dispose()
+})
+
+test("unknown lookup work is bounded, deduplicated and discarded on root switch", async () => {
+  const f = fixture([session("root"), session("b"), session("b-child", "b")])
+  await f.controller.select("root")
+  const pending = deferred<SessionRecord>()
+  const entered = deferred<void>()
+  const get = f.source.get
+  let active = 0
+  let peak = 0
+  let lookups = 0
+  f.source.get = async (id) => {
+    if (!id.startsWith("unknown")) return get(id)
+    lookups++
+    active++
+    peak = Math.max(peak, active)
+    entered.resolve()
+    try {
+      return await pending.promise
+    } finally {
+      active--
+    }
+  }
+  for (let i = 0; i < 100; i++)
+    f.emit({ kind: "refresh", id: `unknown-${i % 10}` })
+  expect(lookups).toBeGreaterThan(0)
+  await entered.promise
+  expect(peak).toBeLessThanOrEqual(4)
+  await f.controller.select("b")
+  const reads = f.calls.children
+  pending.resolve(session("unknown-0", "root"))
+  await settleEvents()
+  expect(f.calls.children).toBe(reads)
+  expect(lookups).toBeLessThanOrEqual(4)
+  expect(f.last()?.rows.map((row) => row.id)).toEqual(["b-child"])
+  f.controller.dispose()
+})
+
+test("reconnect clears unrelated ancestry and restores missed descendants", async () => {
+  const f = fixture([session("root"), session("outside")])
+  await f.controller.select("root")
+  f.emit({ kind: "refresh", id: "outside" })
+  await settleEvents()
+  f.records.push(session("new", "root"))
+  f.emit({ kind: "reconnect" })
+  await settleEvents()
+  expect(f.last()?.rows.map((row) => row.id)).toEqual(["new"])
+  const before = f.calls.get.length
+  f.emit({ kind: "refresh", id: "outside" })
+  await settleEvents()
+  expect(f.calls.get.slice(before)).toEqual(["outside"])
+  f.controller.dispose()
+})
+
+test("new children arriving during initial pagination are not lost", async () => {
+  const f = fixture()
+  const pending = deferred<{ data: SessionRecord[] }>()
+  const entered = deferred<void>()
+  const children = f.source.children
+  f.source.children = () => {
+    f.source.children = children
+    entered.resolve()
+    return pending.promise
+  }
+  const load = f.controller.select("root")
+  await entered.promise
+  f.records.push(session("new", "child"))
+  f.emit({ kind: "created", id: "new", parentID: "child" })
+  pending.resolve({ data: [session("child", "root")] })
+  await load
+  await settleEvents()
+  expect(f.last()?.rows.map((row) => row.id)).toEqual(["child", "new"])
+  f.controller.dispose()
+})
+
+test("known relevant events update titles, outcomes and deletion without manual retry", async () => {
+  const f = fixture()
+  await f.controller.select("root")
+  f.records[1] = {
+    ...session("child", "root"),
+    title: "Renamed",
+    outcome: "failed",
+  }
+  f.emit({ kind: "refresh", id: "child" })
+  await settleEvents()
+  expect(f.last()?.rows[0]).toMatchObject({ title: "Renamed", status: "Error" })
+  f.status.set("child", "running")
+  f.emit({ kind: "refresh", id: "child" })
+  await settleEvents()
+  expect(f.last()?.rows[0]?.status).toBe("Running")
+  f.emit({ kind: "delete", id: "child" })
+  await settleEvents()
+  expect(f.last()?.rows).toEqual([])
+  f.controller.dispose()
+})
+
+test("disposing cancels queued ancestry work and prevents late refreshes", async () => {
+  const f = fixture()
+  await f.controller.select("root")
+  const pending = deferred<SessionRecord>()
+  const get = f.source.get
+  const lookups: string[] = []
+  f.source.get = (id) => {
+    lookups.push(id)
+    return id === "unknown" ? pending.promise : get(id)
+  }
+  f.emit({ kind: "refresh", id: "unknown" })
+  f.emit({ kind: "refresh", id: "queued" })
+  f.controller.dispose()
+  const views = f.views.length
+  const reads = f.calls.children
+  pending.resolve(session("unknown", "root"))
+  await settleEvents()
+  expect(lookups).toEqual(["unknown"])
+  expect(f.views).toHaveLength(views)
+  expect(f.calls.children).toBe(reads)
+})
+
+test("cyclic unknown ancestry falls back to a tree refresh without looping", async () => {
+  const f = fixture([session("root"), session("a", "b"), session("b", "a")])
+  await f.controller.select("root")
+  f.records.push(session("missed", "root"))
+  f.emit({ kind: "refresh", id: "a" })
+  await settleEvents()
+  expect(f.last()?.rows.map((row) => row.id)).toEqual(["missed"])
+  expect(f.calls.get.filter((id) => id === "a")).toHaveLength(1)
+  expect(f.calls.get.filter((id) => id === "b")).toHaveLength(1)
+  f.controller.dispose()
+})
 
 test("restores paginated nested family when opening a child or revisiting", async () => {
   const f = fixture([

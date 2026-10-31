@@ -46,6 +46,12 @@ export function createOpenCodeSource(context: Plugin.Context): Source {
             listener({ kind: "delete", id: event.data.sessionID })
             break
           case "session.created":
+            listener({
+              kind: "created",
+              id: event.data.sessionID,
+              ...(event.data.parentID ? { parentID: event.data.parentID } : {}),
+            })
+            break
           case "session.renamed":
           case "session.moved":
           case "session.execution.started":

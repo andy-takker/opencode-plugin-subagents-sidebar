@@ -26,11 +26,28 @@ shared Solid/OpenTUI runtime. There is no server plugin or bundled renderer.
    unsubscribes on unmount; the returned registration cleanup removes the slot.
 
 Refreshes are event-driven, including reconnect; text token events are ignored.
-Currently relevant lifecycle events across the connected server refresh the
-visible tree, including events from unrelated sessions. Very large trees may
-therefore generate extra requests. Rows remain a flat active-first list; nesting
-determines membership, not indentation. Sidebar sizing and scrolling belong to
-the host.
+The controller caches parent links for the current selection and ignores events
+whose ancestry proves they belong to another root. Creation events supply parent
+links immediately, so new descendants do not have to be present in the list yet.
+For unknown IDs, one deduplicated ancestry walk runs at a time using point reads;
+known relevant events bypass that queue. This adds at most one metadata request
+alongside the existing four-worker child traversal. Parent links are immutable in
+the current API: `session.moved` changes location, not parentage.
+
+Selection changes and reconnect discard ancestry knowledge and queued lookups;
+late lookups cannot affect the new selection or publish after disposal. Initial
+loads without a resolved root, unknown deletions, lookup failures and cyclic
+ancestry conservatively trigger a full refresh. Reconnect and explicit Retry
+always reload the complete tree. A relevant event still invalidates in-flight
+snapshots; a confirmed unrelated event does not. No background polling is used.
+
+The request-count regression uses 100 events for an unknown unrelated child:
+two metadata reads establish its root, with zero tree/status reloads. A second
+100-event burst for the same child requires zero additional requests. This is a
+controlled fixture measurement, not a production latency benchmark.
+
+Rows remain a flat active-first list; nesting determines membership, not
+indentation. Sidebar sizing and scrolling belong to the host.
 
 Separate API reads are not a transactional snapshot. Lifecycle events schedule
 a fresh read when a run changes during traversal. Reconnection restores missed
