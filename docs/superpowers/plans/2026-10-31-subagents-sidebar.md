@@ -85,7 +85,9 @@ test.each([
   ["unknown", undefined, "Unknown"],
 ] as const)("%s / %s → %s", (live, outcome, expected) => {
   const child = record("child", "root", 1, outcome)
-  expect(buildRows("root", [child], new Map([["child", live]]))[0]?.status).toBe(expected)
+  expect(
+    buildRows("root", [child], new Map([["child", live]]))[0]?.status,
+  ).toBe(expected)
 })
 ```
 
