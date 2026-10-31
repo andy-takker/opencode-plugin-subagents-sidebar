@@ -26,4 +26,23 @@ jobs:
           package-manager-cache: false
       - run: bun install --frozen-lockfile
       - run: bun run check
-      - run: bun run package:check
+      - run: bun run package:check --output "${{ runner.temp }}/subagents-package.tgz"
+      - uses: actions/upload-artifact@cf430e030ddbb5b0abf93d22962f4752f3646cd9 # v7.0.2
+        with:
+          name: package-${{ matrix.os }}
+          path: ${{ runner.temp }}/subagents-package.tgz
+          if-no-files-found: error
+          retention-days: 1
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          name: package-${{ matrix.os }}
+          path: ${{ runner.temp }}/downloaded-package
+      - name: Verify artifact round trip
+        run: |
+          node --input-type=module <<'JS'
+          import { readFileSync } from 'node:fs';
+          import { join } from 'node:path';
+          const original = readFileSync(join(process.env.RUNNER_TEMP, 'subagents-package.tgz'));
+          const downloaded = readFileSync(join(process.env.RUNNER_TEMP, 'downloaded-package', 'subagents-package.tgz'));
+          if (!original.equals(downloaded)) throw new Error('Downloaded package differs from the checked archive');
+          JS

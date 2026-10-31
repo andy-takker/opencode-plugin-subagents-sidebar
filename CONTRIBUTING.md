@@ -1,5 +1,10 @@
 # Contributing
 
+Coding agents must follow [AGENTS.md](AGENTS.md). Changes go through pull requests
+to protected `main`, with current Linux/macOS CI checks and resolved discussions.
+The protection applies to administrators too; a second maintainer's approval is
+not required.
+
 Biome's recommended lint rules are enabled. The DOM-specific static-element
 interaction rule is disabled only for `src/tui.tsx`: OpenTUI terminal elements
 use mouse handlers without HTML roles.
