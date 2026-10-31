@@ -32,6 +32,10 @@ screens; the package relied on host-provided runtime modules.
 A newly launched review subagent appeared automatically as Running and changed
 to Done after completion in the global-config terminal.
 
+The final archive was loaded again after adding collapsed-by-default behavior.
+Its `▶ Subagents` header uses the same arrow as the host MCP header; clicking
+expands to `▼ Subagents` and displays the completed review task.
+
 Lifecycle transitions, reconnect, deletion races, narrow Unicode layout and
 dispose are covered automatically. Interactive failure/interruption and real
 network reconnection have not been exercised; do not treat unit tests as those

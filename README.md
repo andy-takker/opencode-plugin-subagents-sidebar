@@ -5,13 +5,21 @@ in the OpenCode terminal sidebar. Click a task to open its session.
 
 **Status: 0.1.0 unreleased.** No npm release is available yet.
 
-Example captured from the real OpenTUI renderer (28 columns):
+Collapsed by default; click the arrow or header to expand the list:
 
 ```text
-Subagents
+▶ Subagents · 5 · 2 running
+```
+
+Expanded example:
+
+```text
+▼ Subagents · 1
 Research API            Done
 ```
 
+- Counts keep updating while collapsed. The expanded/collapsed choice survives
+  navigation for this plugin context; restarting OpenCode or reloading the plugin resets it.
 - Running tasks appear first; finished tasks stay visible.
 - Navigating into a child keeps the same tree. Switching roots changes the list.
 - Restores existing tasks, follows lifecycle events, and uses your current theme.
@@ -47,7 +55,7 @@ array. For example, replacing the example path with your own:
 
 Preserve your other plugins and settings. OpenCode watches this file; use
 `/reload` if needed. Open a session and widen the terminal enough for OpenCode's
-sidebar to appear. `Subagents` shows `No subagents` until the tree has children.
+sidebar to appear. Expand `Subagents` to see the list, or `No subagents` when empty.
 
 ### npm installation (after the first release)
 
@@ -65,7 +73,7 @@ session history is retained by OpenCode.
 ## Troubleshooting
 
 - No sidebar: check `session.sidebar`, terminal width, and that a session is open.
-- `Unable to load subagents`: click `Retry`; check your connected server is reachable.
+- `Error` in the header: expand it and click `Retry`; check your connected server is reachable.
 - No section: verify the package path and inspect
   `~/.local/share/opencode/log/opencode.log` for plugin loading errors.
 - Include OpenCode version, OS, installation method and reproduction steps in an

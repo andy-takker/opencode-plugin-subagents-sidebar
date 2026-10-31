@@ -15,6 +15,7 @@ test("renders restored rows, keeps Unicode titles inside 28 columns, navigates o
     () => <Sidebar context={f.context} sessionID="root" />,
     { width: 28, height: 10 },
   )
+  await screen.mockMouse.click(2, 1)
   const frame = await screen.waitForFrame((frame) => frame.includes("Done"))
   expect(frame).toContain("Subagents")
   expect(frame).toContain("Done")
@@ -40,6 +41,7 @@ test("loading, empty, prop change, and cleanup use the real Solid lifecycle", as
     { width: 28, height: 10 },
   )
   try {
+    await screen.mockMouse.click(2, 1)
     await screen.waitForFrame((frame) => frame.includes("Loading"))
     pending.resolve(session("root"))
     expect(
@@ -65,6 +67,7 @@ test("failed load offers working retry", async () => {
     () => <Sidebar context={f.context} sessionID="root" />,
     { width: 28, height: 10 },
   )
+  await screen.mockMouse.click(2, 1)
   const frame = await screen.waitForFrame((frame) => frame.includes("Retry"))
   expect(frame).toContain("Unable to load subagents")
   expect(frame).not.toContain("sensitive")
@@ -76,4 +79,45 @@ test("failed load offers working retry", async () => {
   expect(
     await screen.waitForFrame((frame) => frame.includes("child")),
   ).toContain("Idle")
+})
+
+test("starts collapsed, updates counts while hidden and preserves choice on remount", async () => {
+  const f = contextFixture()
+  const screen = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 10 },
+  )
+  try {
+    const collapsed = await screen.waitForFrame((frame) =>
+      frame.includes("Subagents"),
+    )
+    expect(collapsed).toContain("▶ Subagents")
+    expect(collapsed).not.toContain("child")
+    f.sessionAPI.active = async () => ({ child: { type: "running" } })
+    f.emit({ id: "connected", type: "server.connected", data: {} })
+    const live = await screen.waitForFrame((frame) =>
+      frame.includes("1 running"),
+    )
+    expect(live).toContain("▶ Subagents · 1 · 1 running")
+    expect(live).not.toContain("child")
+    await screen.mockMouse.click(2, 1)
+    expect(
+      await screen.waitForFrame((frame) => frame.includes("child")),
+    ).toContain("▼ Subagents · 1")
+    await screen.mockMouse.click(2, 1)
+    expect(
+      await screen.waitForFrame((frame) => frame.includes("▶")),
+    ).not.toContain("child")
+    await screen.mockMouse.click(2, 1)
+    await screen.waitForFrame((frame) => frame.includes("child"))
+  } finally {
+    await screen.dispose()
+  }
+  await using remount = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 10 },
+  )
+  expect(
+    await remount.waitForFrame((frame) => frame.includes("child")),
+  ).toContain("▼ Subagents")
 })

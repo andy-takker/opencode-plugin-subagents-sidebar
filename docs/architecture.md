@@ -1,5 +1,11 @@
 # Architecture
 
+The sidebar defaults to collapsed. Its clickable header shows the total count and,
+while collapsed, the running count. Loading/errors remain visible in the header;
+expanding an error reveals Retry. A weakly keyed per-plugin-context Solid signal
+retains the expansion preference across component unmounts without persisting it
+across OpenCode restarts or plugin reloads. Collapsing does not stop synchronization.
+
 The package exports only `./tui`, as TSX. OpenCode compiles it and provides the
 shared Solid/OpenTUI runtime. There is no server plugin or bundled renderer.
 
