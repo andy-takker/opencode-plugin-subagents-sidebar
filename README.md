@@ -84,7 +84,7 @@ When attention is needed, the collapsed section adds a compact summary:
 1 running 1 waiting 1 error
 ```
 
-Each subagent contributes to exactly one of these counts, even with several
+Each subagent contributes to at most one of these counts, even with several
 pending requests. Counts describe the whole tree regardless of the filter.
 Summary items wrap as whole labels on narrow sidebars. Errors remain in All;
 Active contains Running and Waiting. Click a row to open the host session and

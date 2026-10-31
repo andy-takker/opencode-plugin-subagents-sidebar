@@ -143,6 +143,40 @@ test("narrow collapsed attention counts sessions once; Active includes waiting a
   expect(rerun).not.toContain("error")
 })
 
+test("multi-digit attention counts wrap as whole labels at 28 columns", async () => {
+  const running = Array.from({ length: 10 }, (_, i) =>
+    session(`running-${i}`, "root"),
+  )
+  const waiting = Array.from({ length: 11 }, (_, i) =>
+    session(`waiting-${i}`, "root"),
+  )
+  const failed = Array.from({ length: 12 }, (_, i) => ({
+    ...session(`failed-${i}`, "root"),
+    outcome: "failed" as const,
+  }))
+  const f = contextFixture([session("root"), ...running, ...waiting, ...failed])
+  f.sessionAPI.active = async () =>
+    Object.fromEntries(
+      running.map(({ id }) => [id, { type: "running" as const }]),
+    )
+  f.forms.push(...waiting.map(({ id }) => form(id)))
+  await using screen = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 8 },
+  )
+  const frame = await screen.waitForFrame((frame) =>
+    frame.includes("▶ Subagents · 33"),
+  )
+  const lines = frame.split("\n")
+  const labels = ["10 running", "11 waiting", "12 error"]
+  const positions = labels.map((label) =>
+    lines.findIndex((line) => line.includes(label)),
+  )
+  expect(positions.every((line) => line >= 0)).toBe(true)
+  expect(new Set(positions).size).toBeGreaterThan(1)
+  expect(screen.renderer.root.getChildren()[0]?.width).toBeLessThanOrEqual(28)
+})
+
 test("attention read failure replaces stale counts and Retry retains Active", async () => {
   const f = contextFixture()
   f.forms.push(form("child"))
