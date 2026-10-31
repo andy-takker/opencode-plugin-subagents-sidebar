@@ -6,13 +6,17 @@ OpenTUI **0.8.0**, Solid **1.9.17**, Bun **1.3.13**.
 | Environment | Automated tests                                  | Packed OpenCode runtime                                                 |
 | ----------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
 | macOS arm64 | Passed locally, including a clean frozen install | Loaded in OpenCode 2.2.5 from an extracted archive outside the checkout |
-| Linux       | CI configured; not yet run                       | Not verified                                                            |
+| Linux       | Passed in GitHub Actions                         | Not verified                                                            |
 | Windows     | Not verified                                     | Not verified                                                            |
 
 Do not infer support for future OpenCode releases from peer ranges. The peers
 describe the development/runtime contract, not a guarantee of host API stability.
 OpenCode V1 is unsupported. Tests use the official renderer at 28 columns, with
 Unicode titles, click navigation and lifecycle cleanup.
+
+[CI run 41196041900](https://github.com/andy-takker/opencode-plugin-subagents-sidebar/actions/runs/41196041900)
+passed on both `ubuntu-latest` and `macos-latest` at commit `491a81c`:
+frozen install, strict types, lint, formatting, all 29 tests, and package checks.
 
 Before expanding this matrix, load the actual npm archive outside the checkout,
 confirm its section and navigation in OpenCode, test running/finished transitions,
