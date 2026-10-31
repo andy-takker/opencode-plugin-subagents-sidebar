@@ -13,7 +13,10 @@ export type Change =
 export type Source = {
   get(id: string): Promise<SessionRecord>
   children(parentID: string, cursor?: string): Promise<SessionPage>
-  statuses(ids: readonly string[]): Promise<ReadonlyMap<string, LiveStatus>>
+  statuses(
+    ids: readonly string[],
+    isCurrent?: () => boolean,
+  ): Promise<ReadonlyMap<string, LiveStatus>>
   subscribe(listener: (change: Change) => void): () => void
 }
 export type View = {
@@ -180,7 +183,7 @@ export function createController(
       void refresh()
       return
     }
-    const statuses = await source.statuses([...sessions.keys()])
+    const statuses = await source.statuses([...sessions.keys()], valid)
     if (!valid()) return
     for (const id of deleted) sessions.delete(id)
     publish({

@@ -42,6 +42,24 @@ export function Sidebar(props: {
   const [filter, setFilter] = preference.filter
   const [view, setView] = createSignal<View>({ phase: "loading", rows: [] })
   const activeRows = createMemo(() => view().rows.filter((row) => row.active))
+  const counts = createMemo(() => {
+    const result = { running: 0, waiting: 0, errors: 0 }
+    for (const row of view().rows) {
+      if (row.status === "Running") result.running++
+      if (row.status === "Waiting") result.waiting++
+      if (row.status === "Error") result.errors++
+    }
+    return result
+  })
+  const attention = () => counts().waiting > 0 || counts().errors > 0
+  const summary = () =>
+    [
+      counts().running ? `${counts().running} running` : "",
+      counts().waiting ? `${counts().waiting} waiting` : "",
+      counts().errors
+        ? `${counts().errors} error${counts().errors === 1 ? "" : "s"}`
+        : "",
+    ].filter(Boolean)
   const visibleRows = createMemo(() =>
     filter() === "active" ? activeRows() : view().rows,
   )
@@ -63,6 +81,7 @@ export function Sidebar(props: {
       case "Error":
         return text.feedback.error.base
       case "Interrupted":
+      case "Waiting":
         return text.feedback.warning.base
       default:
         return text.muted
@@ -80,11 +99,26 @@ export function Sidebar(props: {
       >
         <b>{expanded() ? "▼" : "▶"} Subagents</b>
         {view().phase === "ready"
-          ? ` · ${view().rows.length}${!expanded() && activeRows().length ? ` · ${activeRows().length} running` : ""}`
+          ? ` · ${view().rows.length}${!expanded() && !attention() && counts().running ? ` · ${counts().running} running` : ""}`
           : view().phase === "loading"
             ? " · Loading…"
             : " · Error"}
       </text>
+      <Show when={!expanded() && view().phase === "ready" && attention()}>
+        <box width="100%" flexDirection="row" flexWrap="wrap" gap={1}>
+          <For each={summary()}>
+            {(count) => (
+              <text
+                flexShrink={0}
+                wrapMode="none"
+                fg={props.context.theme.text.feedback.warning.base}
+              >
+                {count}
+              </text>
+            )}
+          </For>
+        </box>
+      </Show>
       <Show when={expanded()}>
         <Switch>
           <Match when={view().phase === "loading"}>

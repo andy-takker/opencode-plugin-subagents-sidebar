@@ -1,7 +1,7 @@
 import type { SessionInfo } from "@opencode/client"
 import type { Plugin } from "@opencode/plugin/tui"
 import type { Source } from "./controller"
-import type { SessionRecord } from "./model"
+import type { LiveStatus, SessionRecord } from "./model"
 
 function record(info: SessionInfo): SessionRecord {
   return {
@@ -27,14 +27,48 @@ export function createOpenCodeSource(context: Plugin.Context): Source {
       })
       return { data: page.data.map(record), next: page.cursor.next ?? null }
     },
-    async statuses(ids) {
+    async statuses(ids, isCurrent = () => true) {
       const active = await context.client.session.active()
-      return new Map(
+      const statuses = new Map<string, LiveStatus>(
         ids.map((id) => [
           id,
           active[id]?.type === "running" ? "running" : "idle",
         ]),
       )
+      // Session-scoped reads also cover descendants that moved to another
+      // location. Location-wide lists would silently miss those requests.
+      for (let offset = 0; offset < ids.length; offset += 4) {
+        if (!isCurrent()) break
+        let failed = false
+        const batch = await Promise.allSettled(
+          ids.slice(offset, offset + 4).map(async (sessionID) => {
+            try {
+              const permissions = await context.client.permission.list({
+                sessionID,
+              })
+              if (failed || !isCurrent()) return
+              const forms = await context.client.session.form.list({
+                sessionID,
+              })
+              if (
+                permissions.some(
+                  (request) => request.sessionID === sessionID,
+                ) ||
+                forms.some((request) => request.sessionID === sessionID)
+              ) {
+                statuses.set(sessionID, "waiting")
+              }
+            } catch (error) {
+              failed = true
+              throw error
+            }
+          }),
+        )
+        // Drain siblings before allowing the controller to retry a failed load.
+        const rejection = batch.find((result) => result.status === "rejected")
+        if (rejection?.status === "rejected") throw rejection.reason
+      }
+      return statuses
     },
     subscribe(listener) {
       return context.data.listen(({ details: event }) => {
@@ -60,7 +94,14 @@ export function createOpenCodeSource(context: Plugin.Context): Source {
           case "session.execution.interrupted":
           case "session.status":
           case "session.idle":
+          case "permission.asked":
+          case "permission.replied":
+          case "form.replied":
+          case "form.cancelled":
             listener({ kind: "refresh", id: event.data.sessionID })
+            break
+          case "form.created":
+            listener({ kind: "refresh", id: event.data.form.sessionID })
         }
       })
     },

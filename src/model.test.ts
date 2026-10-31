@@ -61,6 +61,10 @@ test("missing and blank titles use the session id", () => {
 
 test.each([
   ["running", "succeeded", "Running"],
+  ["running", "failed", "Running"],
+  ["waiting", "failed", "Waiting"],
+  ["waiting", "succeeded", "Waiting"],
+  ["waiting", undefined, "Waiting"],
   ["idle", "succeeded", "Done"],
   ["idle", "failed", "Error"],
   ["idle", "interrupted", "Interrupted"],
@@ -75,4 +79,25 @@ test.each([
       new Map([["child", live]]),
     )[0]?.status,
   ).toBe(expected)
+})
+
+test("waiting is active and shares deterministic active-first ordering", () => {
+  const rows = buildRows(
+    "root",
+    [
+      record("failed", "root", 0, "failed"),
+      record("waiting", "root", 1),
+      record("running", "root", 2),
+    ],
+    new Map([
+      ["failed", "idle"],
+      ["waiting", "waiting"],
+      ["running", "running"],
+    ]),
+  )
+  expect(rows.map(({ id, active }) => ({ id, active }))).toEqual([
+    { id: "waiting", active: true },
+    { id: "running", active: true },
+    { id: "failed", active: false },
+  ])
 })

@@ -2,8 +2,12 @@
 
 ## Unreleased
 
+- Show confirmed pending permissions/forms as Waiting, include Waiting in Active,
+  and show disjoint running/waiting/error counts while collapsed. Restore pending
+  state on reconnect; surface failed reads and bound/drain pending-request I/O.
+
 - Add an All/Active filter with live counts, All by default, and a per-context
-  preference. Active shows Running tasks; history remains available through All.
+  preference. History remains available through All.
 
 - Ignore confirmed unrelated session events without reloading the visible tree.
   Resolve unknown ancestry with bounded, deduplicated metadata reads while
