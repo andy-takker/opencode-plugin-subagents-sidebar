@@ -1,7 +1,7 @@
 import { expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { createSignal } from "solid-js"
-import { contextFixture, session } from "../test/context"
+import { contextFixture, form, permission, session } from "../test/context"
 import { Sidebar } from "./tui"
 
 async function clickText(
@@ -66,6 +66,119 @@ test("All defaults to complete history; Active filters locally and keeps narrow 
     await screen.waitForFrame((frame) => frame.includes("[All (2)]")),
   ).toContain("History")
   expect(reads).toBe(loadedReads)
+})
+
+test("narrow collapsed attention counts sessions once; Active includes waiting and clicks the correct child", async () => {
+  const f = contextFixture([
+    session("root"),
+    {
+      ...session("waiting", "root"),
+      title: "Ожидание 界界 👩‍💻".repeat(8),
+      outcome: "failed",
+    },
+    { ...session("running", "root"), title: "Working", outcome: "failed" },
+    { ...session("failed", "root"), title: "Failure", outcome: "failed" },
+  ])
+  f.sessionAPI.active = async () => ({
+    waiting: { type: "running" },
+    running: { type: "running" },
+  })
+  f.permissions.push(permission("waiting", "p1"), permission("waiting", "p2"))
+  f.forms.push(form("waiting"))
+  await using screen = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 12 },
+  )
+  const collapsed = await screen.waitForFrame((frame) =>
+    frame.includes("1 waiting"),
+  )
+  expect(collapsed).toContain("▶ Subagents · 3")
+  expect(collapsed).toContain("1 running")
+  expect(collapsed).toContain("1 error")
+  expect(collapsed).not.toContain("2 running")
+  expect(collapsed).not.toContain("Failure")
+  await clickText(screen, "▶ Subagents")
+  await clickText(screen, "Active (2)")
+  const active = await screen.waitForFrame((frame) =>
+    frame.includes("[Active (2)]"),
+  )
+  expect(active).toContain("Waiting")
+  expect(active).toContain("Running")
+  expect(active).not.toContain("Failure")
+  expect(screen.renderer.root.getChildren()[0]?.width).toBeLessThanOrEqual(28)
+  await screen.mockMouse.click(
+    2,
+    active.split("\n").findIndex((line) => line.includes("Waiting")),
+  )
+  expect(f.routes).toEqual([{ type: "session", sessionID: "waiting" }])
+  await clickText(screen, "▼ Subagents")
+  f.permissions.length = 0
+  f.forms.length = 0
+  f.emit({
+    id: "reply",
+    created: 1,
+    type: "form.replied",
+    data: { sessionID: "waiting", id: "form", answer: {} },
+  })
+  const resolved = await screen.waitForFrame((frame) =>
+    frame.includes("2 running"),
+  )
+  expect(resolved).not.toContain("waiting")
+  expect(resolved).toContain("1 error")
+  f.sessionAPI.active = async () => ({
+    waiting: { type: "running" },
+    running: { type: "running" },
+    failed: { type: "running" },
+  })
+  f.emit({
+    id: "rerun",
+    created: 2,
+    type: "session.execution.started",
+    durable: { aggregateID: "failed", seq: 1, version: 1 },
+    data: { sessionID: "failed" },
+  })
+  const rerun = await screen.waitForFrame((frame) =>
+    frame.includes("3 running"),
+  )
+  expect(rerun).not.toContain("error")
+})
+
+test("attention read failure replaces stale counts and Retry retains Active", async () => {
+  const f = contextFixture()
+  f.forms.push(form("child"))
+  await using screen = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 12 },
+  )
+  await clickText(screen, "▶ Subagents")
+  await clickText(screen, "Active (1)")
+  await screen.waitForFrame((frame) => frame.includes("Waiting"))
+  const list = f.formAPI.list
+  f.formAPI.list = async () => {
+    throw new Error("private response")
+  }
+  f.emit({ id: "reconnect", type: "server.connected", data: {} })
+  const failed = await screen.waitForFrame((frame) => frame.includes("Retry"))
+  expect(failed).toContain("Unable to load subagents")
+  expect(failed).not.toContain("Waiting")
+  expect(failed).not.toContain("No active")
+  expect(failed).not.toContain("private")
+  f.formAPI.list = list
+  await clickText(screen, "Retry")
+  expect(
+    await screen.waitForFrame((frame) => frame.includes("Waiting")),
+  ).toContain("[Active (1)]")
+  f.forms.length = 0
+  f.records[1] = { ...session("child", "root"), outcome: "succeeded" }
+  f.emit({
+    id: "cancel",
+    created: 3,
+    type: "form.cancelled",
+    data: { sessionID: "child", id: "form" },
+  })
+  expect(
+    await screen.waitForFrame((frame) => frame.includes("No active subagents")),
+  ).toContain("[Active (0)]")
 })
 
 test("Active stays synchronized while collapsed and restores completed tasks through All", async () => {

@@ -6,11 +6,18 @@ export type SessionRecord = {
   outcome?: "succeeded" | "failed" | "interrupted"
 }
 
-export type LiveStatus = "running" | "idle" | "unknown"
+export type LiveStatus = "running" | "waiting" | "idle" | "unknown"
 export type Row = {
   id: string
   title: string
-  status: "Running" | "Done" | "Error" | "Interrupted" | "Idle" | "Unknown"
+  status:
+    | "Running"
+    | "Waiting"
+    | "Done"
+    | "Error"
+    | "Interrupted"
+    | "Idle"
+    | "Unknown"
   active: boolean
 }
 
@@ -38,7 +45,8 @@ export function buildRows(
       descendants.push(child)
     }
   }
-  const active = (id: string) => statuses.get(id) === "running"
+  const active = (id: string) =>
+    statuses.get(id) === "running" || statuses.get(id) === "waiting"
   descendants.sort(
     (a, b) =>
       Number(active(b.id)) - Number(active(a.id)) ||
@@ -57,13 +65,15 @@ export function buildRows(
       title: session.title?.trim() || session.id,
       active: active(session.id),
       status:
-        live === "running"
-          ? "Running"
-          : live === "unknown"
-            ? "Unknown"
-            : session.outcome
-              ? outcome[session.outcome]
-              : "Idle",
+        live === "waiting"
+          ? "Waiting"
+          : live === "running"
+            ? "Running"
+            : live === "unknown"
+              ? "Unknown"
+              : session.outcome
+                ? outcome[session.outcome]
+                : "Idle",
     }
   })
 }

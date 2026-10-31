@@ -1,7 +1,9 @@
 # Architecture
 
 The sidebar defaults to collapsed. Its clickable header shows the total count and,
-while collapsed, the running count. Loading/errors remain visible in the header;
+while collapsed, the running count. With Waiting or Error rows it instead adds
+a wrapping summary of disjoint running/waiting/error session counts. Multiple
+requests for one session count once. Loading/errors remain visible in the header;
 expanding an error reveals Retry. A weakly keyed per-plugin-context Solid signal
 retains the expansion preference across component unmounts without persisting it
 across OpenCode restarts or plugin reloads. Collapsing does not stop synchronization.
@@ -9,7 +11,7 @@ across OpenCode restarts or plugin reloads. Collapsing does not stop synchroniza
 The same weakly keyed preference record stores the All/Active filter, defaulting
 to All. The expanded ready state offers textual, clickable selectors with counts
 and brackets around the selected mode. A memo derives Active from `Row.active`
-(currently Running only); another selects visible rows without changing their
+(Running or Waiting); another selects visible rows without changing their
 order or the controller's complete snapshot. Changing filters performs no API
 reads. The header remains a total count, while the selected filter's count equals
 the visible row count. Empty Active and an empty tree have distinct messages;
@@ -20,10 +22,11 @@ The package exports only `./tui`, as TSX. OpenCode compiles it and provides the
 shared Solid/OpenTUI runtime. There is no server plugin or bundled renderer.
 
 1. `model.ts` builds rows from session metadata: iterative, cycle-safe descendant
-   traversal, deduplication and deterministic ordering. Running takes precedence
-   over a previous outcome. Unknown live status does not claim success.
+   traversal, deduplication and deterministic ordering. Confirmed Waiting takes
+   precedence over Running, which takes precedence over a previous outcome.
+   Unknown live status does not claim success.
 2. `controller.ts` resolves ancestors, loads every child page and reads active
-   statuses. Each selected session has a generation; obsolete responses and
+   running/pending statuses. Each selected session has a generation; obsolete responses and
    responses after disposal cannot publish. Deleted IDs are tombstoned until
    disposal. A dirty flag coalesces events during a load without losing a refresh.
    Child traversal uses batches of four requests, guards repeated cursors and
@@ -66,3 +69,27 @@ Separate API reads are not a transactional snapshot. Lifecycle events schedule
 a fresh read when a run changes during traversal. Reconnection restores missed
 updates from server metadata. Terminal outcomes come from `Session.Info.outcome`,
 never from merely observing an idle session.
+
+## Pending requests
+
+The 2.2.5 SDK's `permission.list({ sessionID })` and
+`session.form.list({ sessionID })` return pending requests owned by that session.
+Location-wide lists would miss descendants that moved to a different location.
+After the active snapshot, the adapter reads both lists per discovered session in
+batches of four workers, with sequential permission/form calls inside a worker.
+This adds up to two reads per session for a relevant full refresh; there is no
+timer or transcript read. Only request ownership/presence is used, never contents
+or answers. There is no persistent pending-request cache.
+
+The adapter drains all batch siblings before propagating a failure; subsequent
+batches stop. The controller's validity callback stops queued reads on disposal,
+selection change or event invalidation (already-started requests drain normally).
+Failed or unavailable endpoints invalidate the snapshot rather than implying no
+pending requests. Permission asked/replied and form created/replied/cancelled
+events use the same ancestry scoping and invalidation as lifecycle events.
+Reconnect rereads both lists, repairing missed attention events.
+
+Pending presence, including for an idle session, produces Waiting. Once the server
+removes all requests, the current running/terminal state applies. Reruns never
+reuse a latched Error or Waiting flag. Root requests and unrelated sessions are
+excluded from rows and counts by the existing descendant filter.

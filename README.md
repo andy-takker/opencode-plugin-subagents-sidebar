@@ -59,17 +59,42 @@ Review changes       Running
 ```
 
 Click **All** to show the complete history (the default), or **Active** to show
-only `Running` tasks. Brackets mark the selected mode. The header always counts
+`Running` and `Waiting` tasks. Brackets mark the selected mode. The header always counts
 all subagents; each filter shows its matching count, so the selected count is
-the number of visible rows. Tasks disappear from Active when they stop running
+the number of visible rows. Tasks disappear from Active when they finish and have no pending request,
 and remain accessible through All. No active tasks shows `No active subagents`;
 a completely empty tree shows `No subagents` in either mode.
 
 Filtering is local and never pauses synchronization, including while collapsed.
 The choice survives session/root navigation and sidebar remounts in the same
 plugin context; restarting OpenCode or reloading the plugin resets it to All.
-Waiting-for-user states are not classified as Active yet. This feature is not in
-the v0.1.0 release archive or demo above.
+These features are not in the v0.1.0 release archive or demo above.
+
+### Attention and errors (unreleased)
+
+`Waiting` means the server confirms an unanswered permission request or form for
+that subagent. It takes precedence over Running and previous terminal outcomes;
+Running also overrides a previous error. Idle alone never means waiting or stuck.
+Waiting and Running share the existing active-first, creation-time ordering.
+
+When attention is needed, the collapsed section adds a compact summary:
+
+```text
+▶ Subagents · 3
+1 running 1 waiting 1 error
+```
+
+Each subagent contributes to exactly one of these counts, even with several
+pending requests. Counts describe the whole tree regardless of the filter.
+Summary items wrap as whole labels on narrow sidebars. Errors remain in All;
+Active contains Running and Waiting. Click a row to open the host session and
+respond there. The plugin never answers forms or grants permissions.
+
+Replies/cancellations refresh the state; Waiting clears when no request remains.
+Reconnect restores pending requests from the server. A new execution clears a
+previous Error, but a currently pending request still takes priority. A failed or
+unsupported pending-request read shows the load error and Retry rather than
+claiming there is nothing to attend to.
 
 ## Installation
 
@@ -141,7 +166,7 @@ fetch tags and switch to the desired release tag before running the checks.
   [issue](https://github.com/andy-takker/opencode-plugin-subagents-sidebar/issues).
   Remove private task names, paths and credentials from logs.
 
-The plugin reads session metadata through OpenCode's authenticated client; it
+The plugin reads session metadata and pending-request lists through OpenCode's authenticated client; it
 does not read messages, modify sessions, poll on a timer, or send telemetry.
 
 ## Development
