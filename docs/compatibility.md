@@ -45,7 +45,7 @@ dispose are covered automatically. Interactive failure/interruption and real
 network reconnection have not been exercised; do not treat unit tests as those
 manual checks.
 
-## 2026-10-31 v0.2.0 verification
+## 2026-11-01 v0.2.0 verification
 
 The release preparation passes 126 tests (395 assertions), strict types,
 recommended lint, formatting, a frozen install and the exact archive allowlist
@@ -59,10 +59,20 @@ child-session viewer, and Escape returned to the parent. A recent CLI log-tail
 check found no error entries referencing that extracted package; this is not a
 claim that every host log was error-free.
 
+The same extracted archive then displayed a newly resumed review as Running and
+restored a real nested review child under its parent with a `└─` connector; both
+finished as Done with frozen durations. Clicking the nested row opened the host
+child viewer. In another terminal, the extracted plugin ran beside the existing
+Orca TUI plugin. The host session switcher changed from the eleven-descendant
+family to an existing empty root and back, restoring the original tree. Executing
+`/reload` retained a single working sidebar section and complete nested tree;
+navigation worked afterwards. The user's global configuration was not changed.
+A final recent CLI log-tail check again found zero errors referencing the package.
+
 Prior feature smoke checks also exercised a real Running clock and Active
 filtering, the palette command with the sidebar hidden, cancellation and focus
-restoration. Nested-tree layout and confirmed Waiting transitions are covered by
-typed integration and real OpenTUI renderer tests, not by a live human permission
-flow in this release smoke check. The README GIF uses demonstration fixtures in
-Warp with the actual plugin components; it is a UI demonstration, not host
-compatibility evidence. Windows and a Linux host runtime remain unverified.
+restoration. Confirmed Waiting transitions are covered by typed integration and
+real OpenTUI renderer tests, not by a live human permission flow in this release
+smoke check. The README GIF uses demonstration fixtures in Warp with the actual
+plugin components; it is a UI demonstration, not host compatibility evidence.
+Windows and a Linux host runtime remain unverified.

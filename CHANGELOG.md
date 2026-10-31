@@ -1,6 +1,6 @@
 # Changelog
 
-## 0.2.0 — 2026-10-31
+## 0.2.0 — 2026-11-01
 
 Complete session-tree monitoring and keyboard navigation. Nested rows are now
 grouped parent-first rather than globally sorted by activity; Active can include
