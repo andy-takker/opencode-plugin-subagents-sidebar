@@ -1,5 +1,12 @@
 # Changelog
 
+## 0.2.1 — 2026-11-01
+
+- Fix npm-name loading in OpenCode 2.2.5 by publishing precompiled Solid JavaScript
+  instead of raw TSX. Runtime packages remain external and host-owned.
+- Add a packed `node_modules` renderer/navigation regression. Source checkouts
+  now require `bun run build` after changes (included in `bun run check`).
+
 ## 0.2.0 — 2026-11-01
 
 Complete session-tree monitoring and keyboard navigation. Nested rows are now

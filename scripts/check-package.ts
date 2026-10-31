@@ -3,15 +3,7 @@ import { copyFile, mkdtemp, readFile, rm } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { dirname, join, relative, resolve } from "node:path"
 
-const files = [
-  "LICENSE",
-  "README.md",
-  "package.json",
-  "src/controller.ts",
-  "src/model.ts",
-  "src/opencode-source.ts",
-  "src/tui.tsx",
-].sort()
+const files = ["LICENSE", "README.md", "package.json", "dist/tui.js"].sort()
 
 function run(cmd: string[], cwd: string): string {
   const result = Bun.spawnSync(cmd, { cwd, stdout: "pipe", stderr: "pipe" })
@@ -55,21 +47,17 @@ export async function checkPackage(
     const manifest = JSON.parse(
       await readFile(join(root, "package.json"), "utf8"),
     )
-    if (manifest.exports?.["./tui"] !== "./src/tui.tsx")
+    if (manifest.exports?.["./tui"] !== "./dist/tui.js")
       throw new Error("Invalid ./tui export")
-    for (const file of files.filter((file) => /\.tsx?$/.test(file))) {
+    for (const file of files.filter((file) => /\.js$/.test(file))) {
       const source = await readFile(join(root, file), "utf8")
       const imports = new Bun.Transpiler({
-        loader: file.endsWith("tsx") ? "tsx" : "ts",
+        loader: "js",
       }).scanImports(source)
       for (const item of imports) {
         if (!item.path.startsWith(".") && !item.path.startsWith("/")) continue
         const target = relative(root, resolve(root, dirname(file), item.path))
-        if (
-          ![target, `${target}.ts`, `${target}.tsx`].some((path) =>
-            files.includes(path),
-          )
-        ) {
+        if (![target, `${target}.js`].some((path) => files.includes(path))) {
           throw new Error(
             `Unresolved or escaping import in ${file}: ${item.path}`,
           )

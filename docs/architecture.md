@@ -40,8 +40,17 @@ equals the visible row count in Active. Empty Active and an empty tree have dist
 loading/error states take precedence over either. Filtering does not affect
 synchronization, click targets or the retained session history.
 
-The package exports only `./tui`, as TSX. OpenCode compiles it and provides the
-shared Solid/OpenTUI runtime. There is no server plugin or bundled renderer.
+The package exports only `./tui`, as compiled `dist/tui.js`. `bun run build` uses
+the pinned official OpenTUI Solid transform and bundles only our four source
+modules; all package imports stay external. OpenCode provides the shared
+Solid/OpenTUI runtime. There is no server plugin or bundled renderer.
+
+OpenTUI 0.8.0's runtime transform excludes `node_modules`. Publishing raw TSX
+therefore failed on the npm-name installation path in OpenCode 2.2.5 even though
+an archive extracted outside `node_modules` loaded successfully. The package
+regression installs the actual archive beneath `node_modules` and renders/clicks
+its exported sidebar in a separate process with shared runtime modules. This is
+an automated loader regression, not a substitute for the real OpenCode npm smoke.
 
 1. `model.ts` builds rows from session metadata: iterative, cycle-safe descendant
    traversal, deduplication and deterministic ordering. Confirmed Waiting takes

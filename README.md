@@ -13,7 +13,7 @@ open its session without losing sight of the rest of the session tree.
 [Compatibility](docs/compatibility.md) · [Contributing](CONTRIBUTING.md) ·
 [Report a bug](https://github.com/andy-takker/opencode-plugin-subagents-sidebar/issues/new?template=bug_report.yml)
 
-**GitHub release: [v0.2.0](https://github.com/andy-takker/opencode-plugin-subagents-sidebar/releases/tag/v0.2.0).**
+**GitHub release: [v0.2.1](https://github.com/andy-takker/opencode-plugin-subagents-sidebar/releases/tag/v0.2.1).**
 See [installation](#installation) for archive and npm distribution details.
 
 ## Demo
@@ -174,7 +174,7 @@ Tested with **OpenCode V2 2.2.5**. CI runs on Linux and macOS; see the
 
 ### GitHub release
 
-Download `opencode-plugin-subagents-sidebar-0.2.0.tgz` from the GitHub release,
+Download `opencode-plugin-subagents-sidebar-0.2.1.tgz` from the GitHub release,
 extract it to a permanent directory, and add the absolute path of the extracted
 `package` directory to `cli.json` as shown below. OpenCode supplies the runtime;
 the release archive does not need a separate dependency installation.
@@ -184,7 +184,7 @@ the release archive does not need a separate dependency installation.
 Clone this repository and install development dependencies with Bun 1.3.13:
 
 ```sh
-git clone --branch v0.2.0 https://github.com/andy-takker/opencode-plugin-subagents-sidebar.git
+git clone --branch v0.2.1 https://github.com/andy-takker/opencode-plugin-subagents-sidebar.git
 cd opencode-plugin-subagents-sidebar
 bun install --frozen-lockfile
 bun run check
@@ -214,15 +214,19 @@ sidebar to appear. Expand `Subagents` to see the list, or `No subagents` when em
 
 Check [npm](https://www.npmjs.com/package/opencode-plugin-subagents-sidebar) for
 registry availability; GitHub releases and npm publications are separate steps.
-When `0.2.0` is available, add `"opencode-plugin-subagents-sidebar@0.2.0"` to the
+When `0.2.1` is available, add `"opencode-plugin-subagents-sidebar@0.2.1"` to the
 same `cli.json` array instead of the local path. Do not add both entries.
 If it is not available in the registry yet, use the GitHub archive above.
 This is a TUI-only plugin; it does not go in the server's `opencode.json`.
 
+Version 0.2.0's raw TSX fails when installed by npm name in OpenCode 2.2.5
+(`Cannot find package 'react'`). Use 0.2.1's precompiled package; installing React
+is not a workaround. The same host-owned Solid/OpenTUI runtime is used.
+
 ## Update or disable
 
 For a local checkout, update its branch, run `bun install --frozen-lockfile`, then
-`bun run check` and `/reload`. For npm, change the pinned version in `cli.json`
+`bun run check` (which rebuilds `dist/tui.js`) and `/reload`. For npm, change the pinned version in `cli.json`
 after reading its release notes. Remove this plugin's array entry to disable it;
 session history is retained by OpenCode.
 
@@ -247,6 +251,7 @@ does not read messages, modify sessions, poll the server on a timer, or send tel
 
 ```sh
 bun install --frozen-lockfile
+bun run build          # compile plugin code; runtime packages remain external
 bun run check          # types, lint, formatting, tests
 bun run package:check  # inspect actual npm archive and internal imports
 bun run format        # apply formatting

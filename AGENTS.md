@@ -32,7 +32,7 @@ These instructions apply to the entire repository and to all coding agents.
 ## Architecture and behavior
 
 - This is an OpenCode V2 TUI-only plugin. Its sole package export is `./tui`;
-  the host compiles TSX and supplies the shared Solid/OpenTUI runtime. Do not
+  packaging compiles TSX to `dist/tui.js`; the host supplies the shared Solid/OpenTUI runtime. Do not
   bundle a second renderer or add a server plugin.
 - Keep `src/model.ts` pure, `src/controller.ts` responsible for synchronization,
   `src/opencode-source.ts` responsible for the official SDK adapter, and

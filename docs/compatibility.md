@@ -76,3 +76,27 @@ real OpenTUI renderer tests, not by a live human permission flow in this release
 smoke check. The README GIF uses demonstration fixtures in Warp with the actual
 plugin components; it is a UI demonstration, not host compatibility evidence.
 Windows and a Linux host runtime remain unverified.
+
+## 2026-11-01 v0.2.1 packaging verification
+
+Post-publication testing of `opencode-plugin-subagents-sidebar@0.2.0` exposed a
+different loading path: OpenTUI's source transform excludes `node_modules`, so
+the source TSX entry fell through to a React transform. Extracted-directory
+success did not establish npm-name loading. Version 0.2.1 precompiles the entry
+to `dist/tui.js`, keeping host runtime imports external.
+
+The regression test packs the real archive, extracts it inside `node_modules`,
+and uses the official renderer in a separate process to verify loading, sidebar
+expansion, navigation and cleanup. The full local suite passes 127 tests
+(398 assertions), strict types, recommended lint, formatting and package checks.
+
+OpenCode 2.2.5 on macOS arm64 loaded the checked v0.2.1 archive from a directory
+inside `node_modules`, with no package-local dependencies, beside the Orca TUI
+plugin. It displayed a review changing from Running to Done, the existing nested
+tree, aligned durations, chooser search and Enter navigation. `/reload` retained
+one working section. Switching to an empty root and back restored counts from
+twelve to zero to twelve. A recent CLI log-tail check found zero error entries
+referencing this package. The global configuration was not changed.
+
+Loading the exact published npm name still requires a post-publication check;
+the prepublication archive test is not a registry-install claim.
