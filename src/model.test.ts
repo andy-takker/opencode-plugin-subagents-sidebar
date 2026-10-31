@@ -67,9 +67,9 @@ test("missing and blank titles use the session id", () => {
 test.each([
   ["running", "succeeded", "Running"],
   ["running", "failed", "Running"],
-  ["waiting", "failed", "Waiting"],
-  ["waiting", "succeeded", "Waiting"],
-  ["waiting", undefined, "Waiting"],
+  [{ type: "waiting", execution: "running" }, "failed", "Waiting"],
+  [{ type: "waiting", execution: "idle" }, "succeeded", "Waiting"],
+  [{ type: "waiting", execution: "idle" }, undefined, "Waiting"],
   ["idle", "succeeded", "Done"],
   ["idle", "failed", "Error"],
   ["idle", "interrupted", "Interrupted"],
@@ -94,9 +94,9 @@ test("waiting is active and shares deterministic active-first ordering", () => {
       record("waiting", "root", 1),
       record("running", "root", 2),
     ],
-    new Map([
+    new Map<string, LiveStatus>([
       ["failed", "idle"],
-      ["waiting", "waiting"],
+      ["waiting", { type: "waiting", execution: "idle" }],
       ["running", "running"],
     ]),
   )
@@ -140,8 +140,20 @@ test("unknown, inconsistent or future timing never renders a misleading duration
 test.each([
   ["running", 10_000, undefined, undefined, { start: 10_000 }],
   ["running", 10_000, 9_000, "failed", { start: 10_000 }],
-  ["waiting", 10_000, 9_000, "failed", { start: 10_000 }],
-  ["waiting", 10_000, 15_000, "succeeded", { start: 10_000, end: 15_000 }],
+  [
+    { type: "waiting", execution: "running" },
+    10_000,
+    9_000,
+    "failed",
+    { start: 10_000 },
+  ],
+  [
+    { type: "waiting", execution: "idle" },
+    10_000,
+    15_000,
+    "succeeded",
+    { start: 10_000, end: 15_000 },
+  ],
   ["idle", 10_000, 15_000, "succeeded", { start: 10_000, end: 15_000 }],
   ["idle", 10_000, 15_000, "failed", { start: 10_000, end: 15_000 }],
   ["idle", 10_000, 10_000, "interrupted", { start: 10_000, end: 10_000 }],
@@ -153,9 +165,21 @@ test.each([
   ["running", undefined, undefined, undefined, undefined],
   ["running", NaN, undefined, undefined, undefined],
   ["running", -1, undefined, undefined, undefined],
-  ["waiting", 10_000, Infinity, undefined, undefined],
-  ["waiting", 10_000, -1, undefined, undefined],
-  ["waiting", 10_000, 15_000, undefined, undefined],
+  [
+    { type: "waiting", execution: "running" },
+    10_000,
+    Infinity,
+    undefined,
+    undefined,
+  ],
+  [{ type: "waiting", execution: "running" }, 10_000, -1, undefined, undefined],
+  [
+    { type: "waiting", execution: "idle" },
+    10_000,
+    15_000,
+    undefined,
+    undefined,
+  ],
 ] as const)(
   "execution timing %s / busy %s / idle %s / outcome %s",
   (live, busy, idle, outcome, expected) => {

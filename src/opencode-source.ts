@@ -61,7 +61,11 @@ export function createOpenCodeSource(context: Plugin.Context): Source {
                 ) ||
                 forms.some((request) => request.sessionID === sessionID)
               ) {
-                statuses.set(sessionID, "waiting")
+                statuses.set(sessionID, {
+                  type: "waiting",
+                  execution:
+                    active[sessionID]?.type === "running" ? "running" : "idle",
+                })
               }
             } catch (error) {
               failed = true

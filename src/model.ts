@@ -6,7 +6,11 @@ export type SessionRecord = {
   outcome?: "succeeded" | "failed" | "interrupted"
 }
 
-export type LiveStatus = "running" | "waiting" | "idle" | "unknown"
+export type LiveStatus =
+  | "running"
+  | "idle"
+  | "unknown"
+  | { type: "waiting"; execution: "running" | "idle" }
 export type ExecutionDuration = { start: number; end?: number }
 export type Row = {
   id: string
@@ -27,9 +31,10 @@ function executionDuration(
   session: SessionRecord,
   live: LiveStatus,
 ): ExecutionDuration | undefined {
+  const execution = typeof live === "object" ? live.execution : live
   const { busy, idle } = session.time
   if (
-    live === "unknown" ||
+    execution === "unknown" ||
     busy === undefined ||
     !Number.isFinite(busy) ||
     busy < 0 ||
@@ -39,10 +44,10 @@ function executionDuration(
 
   // busy starts the latest execution; idle can still belong to the previous one.
   if (idle !== undefined && idle >= busy) {
-    if (live === "running" || !session.outcome) return undefined
+    if (execution === "running" || !session.outcome) return undefined
     return { start: busy, end: idle }
   }
-  if (live === "running" || live === "waiting") return { start: busy }
+  if (execution === "running") return { start: busy }
   return undefined
 }
 
@@ -97,8 +102,10 @@ export function buildRows(
       descendants.push(child)
     }
   }
-  const active = (id: string) =>
-    statuses.get(id) === "running" || statuses.get(id) === "waiting"
+  const active = (id: string) => {
+    const live = statuses.get(id)
+    return live === "running" || typeof live === "object"
+  }
   descendants.sort(
     (a, b) =>
       Number(active(b.id)) - Number(active(a.id)) ||
@@ -119,7 +126,7 @@ export function buildRows(
       active: active(session.id),
       ...(duration ? { duration } : {}),
       status:
-        live === "waiting"
+        typeof live === "object"
           ? "Waiting"
           : live === "running"
             ? "Running"
