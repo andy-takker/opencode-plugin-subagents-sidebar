@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Show latest-execution duration beside each status, with rerun reset, frozen
+  completion time and unknown-time handling. Update visible ongoing timers
+  locally without polling, and clean up clocks when hidden or disposed.
+
 - Show confirmed pending permissions/forms as Waiting, include Waiting in Active,
   and show disjoint running/waiting/error counts while collapsed. Restore pending
   state on reconnect; surface failed reads and bound/drain pending-request I/O.

@@ -12,7 +12,7 @@ import {
   Switch,
 } from "solid-js"
 import { createController, type View } from "./controller"
-import type { Row } from "./model"
+import { formatDuration, type Row } from "./model"
 import { createOpenCodeSource } from "./opencode-source"
 
 // Preferences survive sidebar unmounts and navigation within a plugin context.
@@ -63,6 +63,16 @@ export function Sidebar(props: {
   const visibleRows = createMemo(() =>
     filter() === "active" ? activeRows() : view().rows,
   )
+  const [now, setNow] = createSignal(Date.now())
+  createEffect(() => {
+    if (!expanded() || view().phase !== "ready") return
+    const rows = visibleRows()
+    setNow(Date.now())
+    if (!rows.some((row) => row.duration && row.duration.end === undefined))
+      return
+    const timer = setInterval(() => setNow(Date.now()), 1_000)
+    onCleanup(() => clearInterval(timer))
+  })
   const controller = createController(
     createOpenCodeSource(props.context),
     setView,
@@ -192,8 +202,8 @@ export function Sidebar(props: {
                   >
                     {row.title.replace(/[\r\n\t]/g, " ")}
                   </text>
-                  <text flexShrink={0} fg={color(row)}>
-                    {row.status}
+                  <text flexShrink={0} wrapMode="none" fg={color(row)}>
+                    {row.status} {formatDuration(row.duration, now())}
                   </text>
                 </box>
               )}

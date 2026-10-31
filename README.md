@@ -96,6 +96,28 @@ previous Error, but a currently pending request still takes priority. A failed o
 unsupported pending-request read shows the load error and Retry rather than
 claiming there is nothing to attend to.
 
+### Execution duration (unreleased)
+
+Expanded rows show the elapsed time of the **latest execution**, for example
+`Running 42s`, `Waiting 3m12s`, or `Done 1h05m`. Waiting inside an execution counts
+toward elapsed time; this is not CPU time or a separate waiting-time counter.
+A completed execution freezes its duration, including when a pending request
+keeps the row in Waiting. A new execution starts a new timer.
+
+The server's `time.busy` supplies the start and `time.idle` the completed end.
+Session creation/update times are never substituted. Missing, inconsistent or
+future timestamps show `—`; duration alone never means a task is stuck.
+Reopening the list, navigating and reconnecting derive time from server metadata
+rather than the time the sidebar was opened. A server restart that starts a new
+execution also resets its duration.
+
+Formatting uses whole seconds below an hour, whole minutes below a day, then
+whole hours (`2d03h`); durations of 1,000 days or more display `999d+`.
+One local clock updates once per second only while the expanded, ready list
+contains an ongoing execution. It stops on collapse, load error, completion or
+unmount and makes no server requests. Status and duration remain together while
+long titles truncate. This feature is not in v0.1.0.
+
 ## Installation
 
 Tested with **OpenCode V2 2.2.5**. CI runs on Linux and macOS; see the
@@ -167,7 +189,7 @@ fetch tags and switch to the desired release tag before running the checks.
   Remove private task names, paths and credentials from logs.
 
 The plugin reads session metadata and pending-request lists through OpenCode's authenticated client; it
-does not read messages, modify sessions, poll on a timer, or send telemetry.
+does not read messages, modify sessions, poll the server on a timer, or send telemetry.
 
 ## Development
 

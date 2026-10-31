@@ -44,6 +44,17 @@ test("failed active snapshot never becomes an idle success", async () => {
   ).rejects.toThrow("offline")
 })
 
+test("session get and paginated children preserve last execution timestamps", async () => {
+  const child = {
+    ...session("child", "root"),
+    time: { created: 1, updated: 99_999, busy: 20_000, idle: 19_000 },
+  }
+  const f = contextFixture([session("root"), child])
+  const source = createOpenCodeSource(f.context)
+  expect((await source.get("child")).time).toEqual(child.time)
+  expect((await source.children("root")).data[0]?.time).toEqual(child.time)
+})
+
 test("lifecycle and reconnect events refresh; token deltas do not", () => {
   const f = contextFixture()
   const changes: Change[] = []
