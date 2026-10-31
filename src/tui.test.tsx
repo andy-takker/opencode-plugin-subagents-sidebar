@@ -73,11 +73,19 @@ test.each([28, 40])(
     const frame = await screen.waitForFrame(
       (frame) => frame.includes("59s") && frame.includes("Interrupted"),
     )
-    assertColumns(frame)
+    const initialColumn =
+      assertColumns(frame)[0]?.search(/Done|Interrupted|Running|Waiting/) ?? 0
     const reads = [f.requests.length, f.attentionRequests.length]
     clock.advance(1_000)
     assertColumns(
       await screen.waitForFrame((frame) => /Running\s+1m00s/.test(frame)),
+    )
+    clock.advance(540_000)
+    const widened = assertColumns(
+      await screen.waitForFrame((frame) => /Running\s+10m00s/.test(frame)),
+    )
+    expect(widened[0]?.search(/Done|Interrupted|Running|Waiting/)).toBe(
+      initialColumn - 1,
     )
     expect([f.requests.length, f.attentionRequests.length]).toEqual(reads)
     const lines = screen.captureCharFrame().split("\n")
