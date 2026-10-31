@@ -93,3 +93,32 @@ test("lifecycle and reconnect events refresh; token deltas do not", () => {
   stop()
   expect(f.listeners.size).toBe(0)
 })
+
+test("creation events preserve parent hints, including explicit new roots", () => {
+  const f = contextFixture()
+  const changes: Change[] = []
+  const stop = createOpenCodeSource(f.context).subscribe((change) =>
+    changes.push(change),
+  )
+  for (const info of [session("new-root"), session("child", "root")]) {
+    f.emit({
+      id: `created-${info.id}`,
+      created: 1,
+      type: "session.created",
+      durable: { aggregateID: info.id, seq: 1, version: 1 },
+      data: {
+        sessionID: info.id,
+        projectID: info.projectID,
+        location: info.location,
+        ...(info.parentID ? { parentID: info.parentID } : {}),
+        slug: info.id,
+        version: "2.2.5",
+      },
+    })
+  }
+  expect(changes).toEqual([
+    { kind: "created", id: "new-root" },
+    { kind: "created", id: "child", parentID: "root" },
+  ])
+  stop()
+})

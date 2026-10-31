@@ -1,5 +1,11 @@
 # Changelog
 
+## Unreleased
+
+- Ignore confirmed unrelated session events without reloading the visible tree.
+  Resolve unknown ancestry with bounded, deduplicated metadata reads while
+  preserving new-child discovery and full reconnect recovery.
+
 ## 0.1.0 — 2026-10-31
 
 First public GitHub release. The npm package has not been published.
