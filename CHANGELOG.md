@@ -1,6 +1,8 @@
 # Changelog
 
-## 0.1.0 — Unreleased
+## 0.1.0 — 2026-10-31
+
+First public GitHub release. The npm package has not been published.
 
 - Add a clickable, theme-aware subagent section to the OpenCode V2 sidebar.
 - Start collapsed with total/running counts; toggle the header to expand or collapse.

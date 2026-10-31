@@ -39,6 +39,7 @@ jobs:
           if-no-files-found: error
           retention-days: 7
   publish:
+    if: ${{ vars.NPM_PUBLISH_ENABLED == 'true' }}
     needs: verify
     runs-on: ubuntu-latest
     environment: npm

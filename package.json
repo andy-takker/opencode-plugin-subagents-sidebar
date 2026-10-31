@@ -1,7 +1,7 @@
 {
   "name": "opencode-plugin-subagents-sidebar",
   "version": "0.1.0",
-  "description": "Live, navigable subagent trees in the OpenCode terminal sidebar",
+  "description": "OpenCode plugin for live subagent monitoring, nested task status and clickable session navigation in a collapsible terminal sidebar",
   "type": "module",
   "license": "MIT",
   "author": "Sergey Natalenko (andy-takker)",
@@ -16,8 +16,20 @@
   "keywords": [
     "opencode",
     "opencode-plugin",
+    "opencode-plugins",
+    "ai-agents",
+    "multi-agent",
+    "coding-agent",
+    "developer-tools",
+    "terminal",
     "tui",
-    "subagents"
+    "cli",
+    "subagents",
+    "sidebar",
+    "opentui",
+    "solidjs",
+    "typescript",
+    "bun"
   ],
   "publishConfig": {
     "access": "public"

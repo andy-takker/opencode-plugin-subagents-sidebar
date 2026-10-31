@@ -1,7 +1,9 @@
 # Releases
 
-The package is **unreleased**. Publishing a GitHub release triggers npm publishing;
-do not publish a release until the following preparation and smoke test are done.
+GitHub **v0.1.0** is the first release; the npm package is not yet published.
+Publishing a GitHub release triggers verification. npm publishing is opt-in:
+the publish job runs only when the repository Actions variable
+`NPM_PUBLISH_ENABLED` is exactly `true`. Leave it unset for GitHub-only releases.
 
 ## One-time setup
 
@@ -24,6 +26,11 @@ Node 24 and npm 11.21.0 (OIDC requires npm >=11.5.1 and Node >=22.14.0).
 A new trust configuration must complete its first publish within two days or be
 recreated. See [npm's current requirements](https://docs.npmjs.com/trusted-publishers).
 
+Only after completing npm setup and explicitly deciding to publish, set the
+repository Actions variable `NPM_PUBLISH_ENABLED=true`. This enables npm publishing
+for subsequent release runs; do not rerun old releases unless their npm publication
+is also intended.
+
 ## Each release
 
 1. Update `package.json`, `bun.lock` if needed and CHANGELOG. In 0.x, breaking
@@ -38,11 +45,14 @@ recreated. See [npm's current requirements](https://docs.npmjs.com/trusted-publi
    Check CLI logs. Update the compatibility record with actual evidence.
 4. Merge the reviewed change, wait for both CI platforms, tag the reviewed commit,
    and publish a GitHub release with compatibility notes. Publication is an
-   explicit maintainer action. Prerelease GitHub releases are excluded by this
+   explicit maintainer action. For a GitHub-only release, attach the checked archive
+   as `opencode-plugin-subagents-sidebar-${package.version}.tgz` and state clearly
+   that npm installation is not available. Prerelease GitHub releases are excluded by this
    initial workflow; design dist-tag handling before adding prereleases.
 5. The release workflow checks tag/version equality, runs all checks on Linux
    and macOS, and uploads the verified Linux tarball. A separate job publishes
-   those exact bytes with `--access public --provenance` using OIDC. No repack
+   those exact bytes with `--access public --provenance` using OIDC when the opt-in
+   variable is enabled. Otherwise the publish job is skipped. No repack
    occurs in the publish job. Verify registry metadata and provenance afterwards.
 
 `prepack` runs the project checks for ordinary source packaging. The archive
