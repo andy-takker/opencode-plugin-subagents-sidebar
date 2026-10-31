@@ -44,7 +44,11 @@ is also intended.
    `OPENCODE_CLI_CONFIG_CONTENT` with an absolute path in its `plugins` array.
    Open a root with nested children; verify titles, running/terminal statuses,
    click navigation, switching trees, reload and coexistence with other plugins.
-   Check CLI logs. Update the compatibility record with actual evidence.
+   Also load the extracted package beneath a directory named `node_modules`:
+   this exercises the npm loader boundary before publication. After npm publication,
+   verify the pinned npm-name entry in a fresh OpenCode instance and compare its
+   registry archive with the checked bytes. An outside-node_modules path alone is
+   insufficient. Check CLI logs and record each installation mode separately.
 4. Merge the reviewed change, wait for both CI platforms, tag the reviewed commit,
    and publish a GitHub release with compatibility notes. Publication is an
    explicit maintainer action. For a GitHub-only release, attach the checked archive
@@ -57,7 +61,8 @@ is also intended.
    variable is enabled. Otherwise the publish job is skipped. No repack
    occurs in the publish job. Verify registry metadata and provenance afterwards.
 
-`prepack` runs the project checks for ordinary source packaging. The archive
+`prepack` runs the project checks (including a build) for ordinary source packaging.
+`package:check` also builds before packing. The archive
 checker uses `--ignore-scripts` to avoid recursion. Its optional output is created
 only after validation and never overwrites an existing file. It checks the exact
 allowlist, entrypoint and internal runtime imports; it is not a replacement for

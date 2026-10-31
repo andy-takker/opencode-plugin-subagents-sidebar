@@ -6,35 +6,24 @@ import { checkPackage } from "./check-package"
 
 test("validates packed files and rejects missing, extra, and escaping imports", async () => {
   const dir = await mkdtemp(join(tmpdir(), "sidebar-package-test-"))
-  const files = [
-    "src/model.ts",
-    "src/controller.ts",
-    "src/opencode-source.ts",
-    "src/tui.tsx",
-    "README.md",
-    "LICENSE",
-  ]
+  const files = ["dist/tui.js", "README.md", "LICENSE"]
   const manifest = {
     name: "sidebar-test",
     version: "0.0.0",
-    exports: { "./tui": "./src/tui.tsx" },
+    exports: { "./tui": "./dist/tui.js" },
     files,
   }
   try {
     for (const file of files)
       await Bun.write(
         join(dir, file),
-        file.endsWith(".ts") ? "export {}" : "test",
+        file.endsWith(".js") ? "export {}" : "test",
       )
-    await Bun.write(
-      join(dir, "src/tui.tsx"),
-      'import "./controller"; export default {}',
-    )
     await Bun.write(join(dir, "package.json"), JSON.stringify(manifest))
     await expect(checkPackage(dir)).resolves.toBeUndefined()
-    await rm(join(dir, "src/controller.ts"))
+    await rm(join(dir, "dist/tui.js"))
     await expect(checkPackage(dir)).rejects.toThrow("files")
-    await Bun.write(join(dir, "src/controller.ts"), "export {}")
+    await Bun.write(join(dir, "dist/tui.js"), "export {}")
     await Bun.write(join(dir, "extra.txt"), "unintended")
     await Bun.write(
       join(dir, "package.json"),
@@ -42,9 +31,9 @@ test("validates packed files and rejects missing, extra, and escaping imports", 
     )
     await expect(checkPackage(dir)).rejects.toThrow("files")
     await Bun.write(join(dir, "package.json"), JSON.stringify(manifest))
-    await Bun.write(join(dir, "src/tui.tsx"), 'import "../../outside"')
+    await Bun.write(join(dir, "dist/tui.js"), 'import "../../outside"')
     await expect(checkPackage(dir)).rejects.toThrow("import")
-    await Bun.write(join(dir, "src/tui.tsx"), 'import "./missing"')
+    await Bun.write(join(dir, "dist/tui.js"), 'import "./missing"')
     await expect(checkPackage(dir)).rejects.toThrow("import")
   } finally {
     await rm(dir, { recursive: true, force: true })
