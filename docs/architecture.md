@@ -93,3 +93,33 @@ Pending presence, including for an idle session, produces Waiting. Once the serv
 removes all requests, the current running/terminal state applies. Reruns never
 reuse a latched Error or Waiting flag. Root requests and unrelated sessions are
 excluded from rows and counts by the existing descendant filter.
+
+## Execution duration
+
+The installed `@opencode/schema` 2.2.5 `Session.Info` contract documents
+`time.busy` as the start of the most recent execution and `time.idle` as the end
+of the most recent completed one. While a new execution runs, idle can still
+belong to the previous run; resuming after a server restart starts a new execution.
+These are UTC epoch milliseconds, exposed by both session get and list.
+The adapter preserves these optional fields without adding API requests.
+Waiting retains its underlying running/idle execution state separately: pending
+attention changes presentation, not the evidence used to validate timestamps.
+
+The pure model derives an optional `{ start, end? }` duration per row:
+
+- An underlying running execution with no end at/after the start uses the current clock,
+  including when pending attention makes the displayed status Waiting.
+- An underlying idle execution with a confirmed outcome and idle at/after busy freezes at
+  that end, even if pending requests keep its status Waiting.
+- Unknown live status, missing/invalid start, invalid end, an idle session
+  without a matching completed run, or a running execution with an already completed pair
+  has unknown duration. Creation/update timestamps are never fallback values.
+- Formatting rejects negative, nonfinite or future times, returns `—` for
+  unknown duration, floors displayed units and caps very long output at `999d+`.
+
+`tui.tsx` owns a single one-second interval while expanded/ready rows contain an
+open duration. A Solid effect samples wall time when rows/filter/visibility
+change and cleans up its interval before replacement or unmount. No network
+operation occurs on a tick. Rows hold timestamps, not accumulated elapsed values,
+so navigation and reconnect do not reset the clock. Tests control the clock at
+the runtime boundary while keeping real OpenTUI rendering and frame scheduling.

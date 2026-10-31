@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { testRender } from "@opentui/solid"
 import { createSignal } from "solid-js"
+import { displayClock } from "../test/clock"
 import { contextFixture, form, permission, session } from "../test/context"
 import { Sidebar } from "./tui"
 
@@ -13,6 +14,127 @@ async function clickText(
   const y = lines.findIndex((line) => line.includes(text))
   await screen.mockMouse.click((lines[y]?.indexOf(text) ?? 0) + 1, y)
 }
+
+test("execution clock ticks locally only while visible, freezes on completion and resets on rerun", async () => {
+  using clock = displayClock(10_000)
+  const child = {
+    ...session("child", "root"),
+    title: "Исследование 界界 👩‍💻".repeat(8),
+    time: { created: 1, updated: 1, busy: 10_000, idle: 9_000 },
+    outcome: "failed" as const,
+  }
+  const f = contextFixture([session("root"), child])
+  f.sessionAPI.active = async () => ({ child: { type: "running" } })
+  const screen = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 10 },
+  )
+  try {
+    await screen.waitForFrame((frame) => frame.includes("1 running"))
+    expect(clock.active).toBe(0)
+    await clickText(screen, "▶ Subagents")
+    await screen.waitForFrame((frame) => frame.includes("Running 0s"))
+    expect(clock.active).toBe(1)
+    const reads = [f.requests.length, f.attentionRequests.length]
+    clock.advance(1_000)
+    const frame = await screen.waitForFrame((frame) =>
+      frame.includes("Running 1s"),
+    )
+    expect([f.requests.length, f.attentionRequests.length]).toEqual(reads)
+    expect(screen.renderer.root.getChildren()[0]?.width).toBeLessThanOrEqual(28)
+    await screen.mockMouse.click(
+      2,
+      frame.split("\n").findIndex((line) => line.includes("Running 1s")),
+    )
+    expect(f.routes).toEqual([{ type: "session", sessionID: "child" }])
+    await clickText(screen, "▼ Subagents")
+    await screen.waitForFrame((frame) => frame.includes("▶ Subagents"))
+    expect(clock.active).toBe(0)
+    clock.advance(130_000)
+    await clickText(screen, "▶ Subagents")
+    await screen.waitForFrame((frame) => frame.includes("Running 2m11s"))
+    clock.advance(4_000)
+    child.time.idle = 145_000
+    f.sessionAPI.active = async () => ({})
+    f.emit({ id: "end", type: "server.connected", data: {} })
+    await screen.waitForFrame((frame) => frame.includes("Error 2m15s"))
+    expect(clock.active).toBe(0)
+    clock.advance(10_000)
+    await screen.flush()
+    expect(screen.captureCharFrame()).toContain("Error 2m15s")
+    child.time.busy = 155_000
+    f.sessionAPI.active = async () => ({ child: { type: "running" } })
+    f.emit({ id: "rerun", type: "server.connected", data: {} })
+    await screen.waitForFrame((frame) => frame.includes("Running 0s"))
+    f.forms.push(form("child"))
+    f.emit({
+      id: "form",
+      created: 155_000,
+      type: "form.created",
+      data: { form: form("child") },
+    })
+    await screen.waitForFrame((frame) => frame.includes("Waiting 0s"))
+    clock.advance(2_000)
+    await screen.waitForFrame((frame) => frame.includes("Waiting 2s"))
+    const list = f.formAPI.list
+    f.formAPI.list = async () => {
+      throw new Error("offline")
+    }
+    f.emit({ id: "offline", type: "server.connected", data: {} })
+    await screen.waitForFrame((frame) =>
+      frame.includes("Unable to load subagents"),
+    )
+    expect(clock.active).toBe(0)
+    f.formAPI.list = list
+    await clickText(screen, "Retry")
+    await screen.waitForFrame((frame) => frame.includes("Waiting 2s"))
+    expect(clock.active).toBe(1)
+  } finally {
+    await screen.dispose()
+  }
+  expect(clock.active).toBe(0)
+  clock.advance(1_000)
+  expect(f.listeners.size).toBe(0)
+})
+
+test("duration restores from server timestamps after navigation/reconnect and missing timing stays unknown", async () => {
+  using clock = displayClock(200_000)
+  const child = {
+    ...session("child", "root"),
+    time: { created: 1, updated: 1, busy: 10_000, idle: 100_000 },
+    outcome: "succeeded" as const,
+  }
+  const f = contextFixture([
+    session("root"),
+    child,
+    session("other"),
+    session("unknown", "other"),
+  ])
+  const [selected, select] = createSignal("root")
+  await using screen = await testRender(
+    () => <Sidebar context={f.context} sessionID={selected()} />,
+    { width: 28, height: 10 },
+  )
+  await clickText(screen, "▶ Subagents")
+  await screen.waitForFrame((frame) => frame.includes("Done 1m30s"))
+  expect(clock.active).toBe(0)
+  f.forms.push(form("child"))
+  f.emit({ id: "pending", type: "server.connected", data: {} })
+  await screen.waitForFrame((frame) => frame.includes("Waiting 1m30s"))
+  expect(clock.active).toBe(0)
+  f.forms.length = 0
+  select("other")
+  await screen.waitForFrame((frame) => frame.includes("Idle —"))
+  expect(clock.active).toBe(0)
+  clock.advance(10_000)
+  select("child")
+  await screen.waitForFrame((frame) => frame.includes("Done 1m30s"))
+  child.time.busy = 205_000
+  f.sessionAPI.active = async () => ({ child: { type: "running" } })
+  f.emit({ id: "reconnect", type: "server.connected", data: {} })
+  await screen.waitForFrame((frame) => frame.includes("Running 5s"))
+  expect(clock.active).toBe(1)
+})
 
 test("All defaults to complete history; Active filters locally and keeps narrow Unicode navigation", async () => {
   const running = {

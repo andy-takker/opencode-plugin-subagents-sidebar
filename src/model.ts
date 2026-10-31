@@ -2,11 +2,16 @@ export type SessionRecord = {
   id: string
   parentID?: string
   title?: string
-  time: { created: number; updated: number }
+  time: { created: number; updated: number; busy?: number; idle?: number }
   outcome?: "succeeded" | "failed" | "interrupted"
 }
 
-export type LiveStatus = "running" | "waiting" | "idle" | "unknown"
+export type LiveStatus =
+  | "running"
+  | "idle"
+  | "unknown"
+  | { type: "waiting"; execution: "running" | "idle" }
+export type ExecutionDuration = { start: number; end?: number }
 export type Row = {
   id: string
   title: string
@@ -19,6 +24,58 @@ export type Row = {
     | "Idle"
     | "Unknown"
   active: boolean
+  duration?: ExecutionDuration
+}
+
+function executionDuration(
+  session: SessionRecord,
+  live: LiveStatus,
+): ExecutionDuration | undefined {
+  const execution = typeof live === "object" ? live.execution : live
+  const { busy, idle } = session.time
+  if (
+    execution === "unknown" ||
+    busy === undefined ||
+    !Number.isFinite(busy) ||
+    busy < 0 ||
+    (idle !== undefined && (!Number.isFinite(idle) || idle < 0))
+  )
+    return undefined
+
+  // busy starts the latest execution; idle can still belong to the previous one.
+  if (idle !== undefined && idle >= busy) {
+    if (execution === "running" || !session.outcome) return undefined
+    return { start: busy, end: idle }
+  }
+  if (execution === "running") return { start: busy }
+  return undefined
+}
+
+export function formatDuration(
+  duration: ExecutionDuration | undefined,
+  now: number,
+): string {
+  if (!duration) return "—"
+  const { start, end = now } = duration
+  if (
+    !Number.isFinite(start) ||
+    !Number.isFinite(end) ||
+    !Number.isFinite(now) ||
+    start < 0 ||
+    end < start ||
+    end > now
+  )
+    return "—"
+  const seconds = Math.floor((end - start) / 1_000)
+  const minutes = Math.floor(seconds / 60)
+  const hours = Math.floor(minutes / 60)
+  const days = Math.floor(hours / 24)
+  const pad = (value: number) => String(value).padStart(2, "0")
+  if (days >= 1_000) return "999d+"
+  if (days) return `${days}d${pad(hours % 24)}h`
+  if (hours) return `${hours}h${pad(minutes % 60)}m`
+  if (minutes) return `${minutes}m${pad(seconds % 60)}s`
+  return `${seconds}s`
 }
 
 export function buildRows(
@@ -45,8 +102,10 @@ export function buildRows(
       descendants.push(child)
     }
   }
-  const active = (id: string) =>
-    statuses.get(id) === "running" || statuses.get(id) === "waiting"
+  const active = (id: string) => {
+    const live = statuses.get(id)
+    return live === "running" || typeof live === "object"
+  }
   descendants.sort(
     (a, b) =>
       Number(active(b.id)) - Number(active(a.id)) ||
@@ -55,6 +114,7 @@ export function buildRows(
   )
   return descendants.map((session) => {
     const live = statuses.get(session.id) ?? "unknown"
+    const duration = executionDuration(session, live)
     const outcome = {
       succeeded: "Done",
       failed: "Error",
@@ -64,8 +124,9 @@ export function buildRows(
       id: session.id,
       title: session.title?.trim() || session.id,
       active: active(session.id),
+      ...(duration ? { duration } : {}),
       status:
-        live === "waiting"
+        typeof live === "object"
           ? "Waiting"
           : live === "running"
             ? "Running"

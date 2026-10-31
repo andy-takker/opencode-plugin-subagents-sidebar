@@ -1,6 +1,7 @@
 import { expect, test } from "bun:test"
 import { contextFixture, form, permission, session } from "../test/context"
 import { type Change, createController, type View } from "./controller"
+import { buildRows, formatDuration } from "./model"
 import { createOpenCodeSource } from "./opencode-source"
 
 test("SDK adapter uses exact parent and cursor, with no location filter", async () => {
@@ -43,6 +44,53 @@ test("failed active snapshot never becomes an idle success", async () => {
     createOpenCodeSource(f.context).statuses(["child"]),
   ).rejects.toThrow("offline")
 })
+
+test("session get and paginated children preserve last execution timestamps", async () => {
+  const child = {
+    ...session("child", "root"),
+    time: { created: 1, updated: 99_999, busy: 20_000, idle: 19_000 },
+  }
+  const f = contextFixture([session("root"), child])
+  const source = createOpenCodeSource(f.context)
+  expect((await source.get("child")).time).toEqual(child.time)
+  expect((await source.children("root")).data[0]?.time).toEqual(child.time)
+})
+
+test.each([
+  [true, 15_000, "—"],
+  [false, 15_000, "5s"],
+  [true, undefined, "10s"],
+  [false, undefined, "—"],
+  [true, 9_000, "10s"],
+  [false, 9_000, "—"],
+] as const)(
+  "pending attention preserves execution timing: running=%s idle=%s",
+  async (running, idle, expected) => {
+    const child = {
+      ...session("child", "root"),
+      outcome: "succeeded" as const,
+      time: {
+        created: 1,
+        updated: 1,
+        busy: 10_000,
+        ...(idle !== undefined ? { idle } : {}),
+      },
+    }
+    const f = contextFixture([session("root"), child])
+    f.sessionAPI.active = async () =>
+      running ? { child: { type: "running" } } : {}
+    f.permissions.push(permission("child"))
+    const source = createOpenCodeSource(f.context)
+    const rows = buildRows(
+      "root",
+      [await source.get("child")],
+      await source.statuses(["child"]),
+    )
+    expect(rows[0]?.status).toBe("Waiting")
+    expect(rows[0]?.active).toBe(true)
+    expect(formatDuration(rows[0]?.duration, 20_000)).toBe(expected)
+  },
+)
 
 test("lifecycle and reconnect events refresh; token deltas do not", () => {
   const f = contextFixture()
@@ -135,8 +183,8 @@ test("pending permissions and forms override running, deduplicate sessions, and 
   const source = createOpenCodeSource(f.context)
   expect([...(await source.statuses(["child", "idle-child", "root"]))]).toEqual(
     [
-      ["child", "waiting"],
-      ["idle-child", "waiting"],
+      ["child", { type: "waiting", execution: "running" }],
+      ["idle-child", { type: "waiting", execution: "idle" }],
       ["root", "idle"],
     ],
   )
@@ -149,7 +197,10 @@ test("pending permissions and forms override running, deduplicate sessions, and 
     sessionID: "idle-child",
   })
   f.permissions.length = 0
-  expect((await source.statuses(["child"])).get("child")).toBe("waiting")
+  expect((await source.statuses(["child"])).get("child")).toEqual({
+    type: "waiting",
+    execution: "running",
+  })
   f.forms.length = 0
   expect((await source.statuses(["child"])).get("child")).toBe("running")
   f.sessionAPI.active = async () => ({})
@@ -245,7 +296,7 @@ test("attention reads cover every requested session beyond one batch", async () 
   f.forms.push(form("9"))
   const ids = Array.from({ length: 10 }, (_, i) => String(i))
   const statuses = await createOpenCodeSource(f.context).statuses(ids)
-  expect(statuses.get("9")).toBe("waiting")
+  expect(statuses.get("9")).toEqual({ type: "waiting", execution: "idle" })
   expect([...statuses.keys()]).toEqual(ids)
   expect(f.attentionRequests).toHaveLength(20)
   expect(

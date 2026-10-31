@@ -6,7 +6,12 @@ import type { LiveStatus, SessionRecord } from "./model"
 function record(info: SessionInfo): SessionRecord {
   return {
     id: info.id,
-    time: { created: info.time.created, updated: info.time.updated },
+    time: {
+      created: info.time.created,
+      updated: info.time.updated,
+      ...(info.time.busy !== undefined ? { busy: info.time.busy } : {}),
+      ...(info.time.idle !== undefined ? { idle: info.time.idle } : {}),
+    },
     ...(info.parentID ? { parentID: info.parentID } : {}),
     ...(info.title !== undefined ? { title: info.title } : {}),
     ...(info.outcome ? { outcome: info.outcome } : {}),
@@ -56,7 +61,11 @@ export function createOpenCodeSource(context: Plugin.Context): Source {
                 ) ||
                 forms.some((request) => request.sessionID === sessionID)
               ) {
-                statuses.set(sessionID, "waiting")
+                statuses.set(sessionID, {
+                  type: "waiting",
+                  execution:
+                    active[sessionID]?.type === "running" ? "running" : "idle",
+                })
               }
             } catch (error) {
               failed = true
