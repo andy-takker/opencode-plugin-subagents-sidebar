@@ -1,4 +1,5 @@
 import { Plugin } from "@opencode/plugin/tui"
+import type { KeyEvent } from "@opentui/core"
 import type { JSX } from "@opentui/solid"
 import {
   createEffect,
@@ -290,6 +291,7 @@ function SubagentPicker(props: {
   const [message, setMessage] = createSignal("")
   const source = createOpenCodeSource(props.context)
   let revision = 0
+  let selectionRevision = 0
   let disposed = false
   const controller = createController(
     {
@@ -343,7 +345,30 @@ function SubagentPicker(props: {
     disposed = true
     controller.dispose()
   })
-  async function choose(id = selected()) {
+  function select(id: string | undefined) {
+    selectionRevision++
+    setSelected(id)
+  }
+  function handleKeyDown(event: KeyEvent) {
+    if (event.name === "escape") {
+      event.preventDefault()
+      props.close()
+    }
+    if (event.name === "return" || event.name === "linefeed") {
+      event.preventDefault()
+      void choose()
+    }
+    if (event.name === "up" || event.name === "down") {
+      event.preventDefault()
+      const next = Math.max(
+        0,
+        Math.min(rows().length - 1, index() + (event.name === "up" ? -1 : 1)),
+      )
+      select(rows()[next]?.id)
+    }
+  }
+  async function choose() {
+    const id = selected()
     if (!current() || opening()) return
     if (view().phase === "error") {
       setMessage("")
@@ -356,6 +381,7 @@ function SubagentPicker(props: {
       return
     }
     const version = revision
+    const selectionVersion = selectionRevision
     setOpening(true)
     setMessage("")
     try {
@@ -364,6 +390,7 @@ function SubagentPicker(props: {
       if (
         record.id !== id ||
         version !== revision ||
+        selectionVersion !== selectionRevision ||
         !view().rows.some((row) => row.id === id)
       ) {
         setMessage("List changed. Select again.")
@@ -400,28 +427,12 @@ function SubagentPicker(props: {
         focusedBackgroundColor={props.context.theme.background.raised.high}
         onInput={(value) => {
           setQuery(value)
-          setSelected(undefined)
+          select(undefined)
         }}
         onSubmit={() => {
           void choose()
         }}
-        onKeyDown={(event) => {
-          if (event.name === "escape") {
-            event.preventDefault()
-            props.close()
-          }
-          if (event.name === "up" || event.name === "down") {
-            event.preventDefault()
-            const next = Math.max(
-              0,
-              Math.min(
-                rows().length - 1,
-                index() + (event.name === "up" ? -1 : 1),
-              ),
-            )
-            setSelected(rows()[next]?.id)
-          }
-        }}
+        onKeyDown={handleKeyDown}
       />
       <Switch>
         <Match when={view().phase === "loading"}>
@@ -445,15 +456,19 @@ function SubagentPicker(props: {
               value: row.id,
             }))}
             selectedIndex={index()}
+            onKeyDown={(event) => {
+              // Keep both focus targets on the same ID-based selection path.
+              // Native select bindings otherwise maintain a separate index.
+              event.preventDefault()
+              handleKeyDown(event)
+            }}
             textColor={props.context.theme.text.base}
             descriptionColor={props.context.theme.text.muted}
             selectedTextColor={props.context.theme.text.base}
             selectedDescriptionColor={props.context.theme.text.base}
             backgroundColor={props.context.theme.background.raised.base}
             selectedBackgroundColor={props.context.theme.background.raised.max}
-            onSelect={(_index, option) => {
-              if (typeof option?.value === "string") void choose(option.value)
-            }}
+            onSelect={() => void choose()}
           />
         </Match>
       </Switch>

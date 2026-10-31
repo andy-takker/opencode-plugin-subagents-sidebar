@@ -13,8 +13,11 @@ The chooser uses the same complete tree, statuses, duration formatter, and bound
 connector projection. Title search is local and includes every status. A local
 one-second display clock exists only for matching open-ended durations. Selection
 is tracked by session ID across live reorder/removal, not by the visible index.
+Both search and list focus use the same keyboard selection/activation handlers;
+the list cannot independently select a replacement index after removal.
 Opening performs a public metadata point read; cancellation, route changes,
-disposal, missing membership, or intervening events prevent stale navigation.
+selection/search changes, disposal, missing membership, or intervening events
+prevent stale navigation.
 Errors remain visible and retryable. No transcripts or write APIs are used.
 
 The sidebar defaults to collapsed. Its clickable header shows the total count and,

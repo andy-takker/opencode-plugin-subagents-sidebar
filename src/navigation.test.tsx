@@ -5,6 +5,95 @@ import { form, session } from "../test/context"
 import { navigationFixture } from "../test/navigation"
 import plugin from "./tui"
 
+test.each(["focus", "delete"] as const)(
+  "list selection remains authoritative after %s",
+  async (action) => {
+    const f = navigationFixture([
+      session("root"),
+      { ...session("a", "root"), title: "Alpha" },
+      { ...session("b", "root"), title: "Beta" },
+    ])
+    const cleanup = await plugin.setup(f.context)
+    await using screen = await testRender(f.render, {
+      width: 60,
+      height: 20,
+      kittyKeyboard: true,
+    })
+    await f.open()
+    await screen.waitForFrame((frame) => frame.includes("Alpha"))
+    const lines = screen.captureCharFrame().split("\n")
+    await screen.mockMouse.click(
+      4,
+      lines.findIndex((line) => line.includes("Alpha")),
+    )
+    await screen.mockInput.pressKey("ARROW_DOWN")
+    await screen.waitForFrame((frame) => frame.includes("▶ Beta"))
+    if (action === "focus") {
+      await screen.mockMouse.click(
+        4,
+        lines.findIndex((line) => line.includes("Search task")),
+      )
+    } else {
+      f.records.splice(2, 1)
+      f.emit({
+        type: "session.deleted",
+        id: "deleted",
+        created: 1,
+        durable: { aggregateID: "b", seq: 1, version: 2 },
+        data: { sessionID: "b" },
+      })
+      await screen.waitForFrame((frame) => !frame.includes("Beta"))
+    }
+    await screen.mockInput.pressKey("RETURN")
+    await screen.waitForFrame(
+      (frame) => f.routes.length > 0 || frame.includes("Selection changed"),
+    )
+    expect(f.routes).toEqual(
+      action === "focus" ? [{ type: "session", sessionID: "b" }] : [],
+    )
+    await cleanup?.()
+  },
+)
+
+test.each(["selection", "query"] as const)(
+  "changing %s invalidates a pending navigation",
+  async (action) => {
+    const f = navigationFixture([
+      session("root"),
+      { ...session("a", "root"), title: "Alpha" },
+      { ...session("b", "root"), title: "Beta" },
+    ])
+    const cleanup = await plugin.setup(f.context)
+    await using screen = await testRender(f.render, {
+      width: 60,
+      height: 20,
+      kittyKeyboard: true,
+    })
+    await f.open()
+    await screen.waitForFrame((frame) => frame.includes("Alpha"))
+    const gate = Promise.withResolvers<void>()
+    const original = f.sessionAPI.get
+    f.sessionAPI.get = async (input) => {
+      await gate.promise
+      return original(input)
+    }
+    await screen.mockInput.pressKey("RETURN")
+    await screen.waitForFrame((frame) => frame.includes("Opening…"))
+    if (action === "selection") await screen.mockInput.pressKey("ARROW_DOWN")
+    else await screen.mockInput.typeText("Beta")
+    await screen.waitForFrame((frame) => frame.includes("▶ Beta"))
+    gate.resolve()
+    await screen.waitForFrame(
+      (frame) => f.routes.length > 0 || frame.includes("Select again"),
+    )
+    expect(f.routes).toEqual([])
+    await screen.mockInput.pressKey("RETURN")
+    await screen.waitForFrame(() => f.routes.length > 0)
+    expect(f.routes).toEqual([{ type: "session", sessionID: "b" }])
+    await cleanup?.()
+  },
+)
+
 test("command works without a sidebar, searches the whole tree and opens with the keyboard", async () => {
   const parent = {
     ...session("parent", "root"),
