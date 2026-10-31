@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Align statuses and durations in separate shared columns, including mixed
+  duration lengths and clock updates, while preserving title truncation.
+
 - Show latest-execution duration beside each status, with rerun reset, frozen
   completion time and unknown-time handling. Update visible ongoing timers
   locally without polling, and clean up clocks when hidden or disposed.

@@ -115,8 +115,9 @@ Formatting uses whole seconds below an hour, whole minutes below a day, then
 whole hours (`2d03h`); durations of 1,000 days or more display `999d+`.
 One local clock updates once per second only while the expanded, ready list
 contains an ongoing execution. It stops on collapse, load error, completion or
-unmount and makes no server requests. Status and duration remain together while
-long titles truncate. This feature is not in v0.1.0.
+unmount and makes no server requests. Visible rows share status and duration
+column widths: statuses align left, durations align right, and long titles
+truncate. This feature is not in v0.1.0.
 
 ## Installation
 
