@@ -15,6 +15,7 @@ test("renders restored rows, keeps Unicode titles inside 28 columns, navigates o
     () => <Sidebar context={f.context} sessionID="root" />,
     { width: 28, height: 10 },
   )
+  await screen.waitForFrame((frame) => frame.includes("▶ Subagents"))
   await screen.mockMouse.click(2, 1)
   const frame = await screen.waitForFrame((frame) => frame.includes("Done"))
   expect(frame).toContain("Subagents")
@@ -41,6 +42,7 @@ test("loading, empty, prop change, and cleanup use the real Solid lifecycle", as
     { width: 28, height: 10 },
   )
   try {
+    await screen.waitForFrame((frame) => frame.includes("▶ Subagents"))
     await screen.mockMouse.click(2, 1)
     await screen.waitForFrame((frame) => frame.includes("Loading"))
     pending.resolve(session("root"))
@@ -67,6 +69,7 @@ test("failed load offers working retry", async () => {
     () => <Sidebar context={f.context} sessionID="root" />,
     { width: 28, height: 10 },
   )
+  await screen.waitForFrame((frame) => frame.includes("▶ Subagents"))
   await screen.mockMouse.click(2, 1)
   const frame = await screen.waitForFrame((frame) => frame.includes("Retry"))
   expect(frame).toContain("Unable to load subagents")
