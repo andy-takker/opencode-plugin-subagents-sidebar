@@ -1,6 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.2.0 — 2026-11-01
+
+Complete session-tree monitoring and keyboard navigation. Nested rows are now
+grouped parent-first rather than globally sorted by activity; Active can include
+separately counted inactive ancestors. Public package exports are unchanged.
 
 - Add the **Open subagent** command and `/subagents` for searchable, keyboard-only
   navigation through the current session tree, with live state and guarded opening.
