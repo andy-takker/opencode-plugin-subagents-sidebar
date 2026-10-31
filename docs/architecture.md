@@ -10,11 +10,13 @@ across OpenCode restarts or plugin reloads. Collapsing does not stop synchroniza
 
 The same weakly keyed preference record stores the All/Active filter, defaulting
 to All. The expanded ready state offers textual, clickable selectors with counts
-and brackets around the selected mode. A memo derives Active from `Row.active`
-(Running or Waiting); another selects visible rows without changing their
-order or the controller's complete snapshot. Changing filters performs no API
-reads. The header remains a total count, while the selected filter's count equals
-the visible row count. Empty Active and an empty tree have distinct messages;
+and brackets around the selected mode. A memo derives the Active count from
+`Row.active` (Running or Waiting); `treeRows` selects these rows and their
+ancestors without changing the controller's complete snapshot. Inactive ancestors
+have muted titles and a `·` marker, retain their real statuses and click targets,
+and contribute only to a separate `+ N context (·)` count. Changing filters performs
+no API reads. The header remains a total count; the active count plus context count
+equals the visible row count in Active. Empty Active and an empty tree have distinct messages;
 loading/error states take precedence over either. Filtering does not affect
 synchronization, click targets or the retained session history.
 
@@ -62,8 +64,32 @@ two metadata reads establish its root, with zero tree/status reloads. A second
 100-event burst for the same child requires zero additional requests. This is a
 controlled fixture measurement, not a production latency benchmark.
 
-Rows remain a flat active-first list; nesting determines membership, not
-indentation. Sidebar sizing and scrolling belong to the host.
+## Tree ordering and projection
+
+`buildRows` discovers a deduplicated, cycle-free tree breadth-first. A reverse
+pass propagates active membership to ancestors without making those ancestors
+active themselves. Siblings sort by active-subtree first, then creation time and
+ID. An iterative depth-first traversal emits preorder rows: parents precede their
+children and subtrees stay together. This replaces global flat active-first
+ordering. Rows carry an internal `parentID` only when their parent is another row;
+direct children of the selected root form the forest's top level. Disconnected
+or deleted-parent descendants remain excluded by discovery and tombstones.
+
+`treeRows` consumes that preorder. A reverse pass retains active rows and their
+ancestors for Active; All keeps every row. It then computes `├─`, `└─`, `│` from
+the visible siblings, so hiding a branch also repairs the connectors. Traversals
+are iterative and linear apart from sibling sorting; prefixes never grow with
+unbounded depth. The first two nested levels use normal tree paths (three columns
+per level). Deeper rows use `…  ├─ ` or `…  └─ `, a maximum of six columns; ellipsis
+means the earlier path is abbreviated, not that intermediate rows are hidden.
+Top-level rows have no connector, matching a forest of subagents below the hidden
+root. Tests exercise 10,000 nested nodes without recursion, shared context,
+completion, deleted parents, other roots, cycles, deduplication and filtered paths.
+
+The TUI keeps connectors and context markers separate from the shrinking title,
+so middle truncation cannot erase ancestry markers. Status and duration columns
+are shared by all visible rows, including context rows. Sidebar sizing and
+scrolling belong to the host.
 
 Separate API reads are not a transactional snapshot. Lifecycle events schedule
 a fresh read when a run changes during traversal. Reconnection restores missed

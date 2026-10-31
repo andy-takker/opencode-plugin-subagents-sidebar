@@ -12,7 +12,7 @@ import {
   Switch,
 } from "solid-js"
 import { createController, type View } from "./controller"
-import { formatDuration, type Row } from "./model"
+import { formatDuration, type Row, treeRows } from "./model"
 import { createOpenCodeSource } from "./opencode-source"
 
 // Preferences survive sidebar unmounts and navigation within a plugin context.
@@ -61,7 +61,10 @@ export function Sidebar(props: {
         : "",
     ].filter(Boolean)
   const visibleRows = createMemo(() =>
-    filter() === "active" ? activeRows() : view().rows,
+    treeRows(view().rows, filter() === "active"),
+  )
+  const contextCount = createMemo(
+    () => visibleRows().filter((row) => row.context).length,
   )
   const [now, setNow] = createSignal(Date.now())
   const columnWidths = createMemo(() => {
@@ -177,6 +180,11 @@ export function Sidebar(props: {
                 )}
               </For>
             </box>
+            <Show when={contextCount() > 0}>
+              <text fg={props.context.theme.text.muted}>
+                {`+ ${contextCount()} context (·)`}
+              </text>
+            </Show>
             <For
               each={visibleRows()}
               fallback={
@@ -201,16 +209,47 @@ export function Sidebar(props: {
                       })
                   }}
                 >
-                  <text
+                  <box
                     flexGrow={1}
                     flexShrink={1}
                     minWidth={0}
-                    truncate
-                    wrapMode="none"
-                    fg={props.context.theme.text.base}
+                    flexDirection="row"
                   >
-                    {row.title.replace(/[\r\n\t]/g, " ")}
-                  </text>
+                    <Show when={row.prefix}>
+                      <text
+                        flexShrink={0}
+                        width={row.prefix.length}
+                        wrapMode="none"
+                        fg={props.context.theme.text.muted}
+                      >
+                        {row.prefix}
+                      </text>
+                    </Show>
+                    <Show when={row.context}>
+                      <text
+                        flexShrink={0}
+                        width={2}
+                        wrapMode="none"
+                        fg={props.context.theme.text.muted}
+                      >
+                        ·{" "}
+                      </text>
+                    </Show>
+                    <text
+                      flexGrow={1}
+                      flexShrink={1}
+                      minWidth={0}
+                      truncate
+                      wrapMode="none"
+                      fg={
+                        row.context
+                          ? props.context.theme.text.muted
+                          : props.context.theme.text.base
+                      }
+                    >
+                      {row.title.replace(/[\r\n\t]/g, " ")}
+                    </text>
+                  </box>
                   <text
                     width={columnWidths().status}
                     flexShrink={0}

@@ -106,8 +106,8 @@ test("created parent hints ignore unrelated roots and discover nested children",
   await settleEvents()
   expect(f.last()?.rows.map((row) => row.id)).toEqual([
     "child",
-    "deep",
     "nested",
+    "deep",
   ])
   f.controller.dispose()
 })
@@ -120,8 +120,8 @@ test("unknown relevant ancestry and failed lookups conservatively reconcile", as
   await settleEvents()
   expect(f.last()?.rows.map((row) => row.id)).toEqual([
     "child",
-    "new",
     "parent",
+    "new",
   ])
   f.records.push(session("missed", "root"))
   f.emit({ kind: "refresh", id: "temporarily-unavailable" })

@@ -100,7 +100,7 @@ export function contextFixture(
     theme: {
       text: {
         base: color,
-        muted: color,
+        muted: RGBA.fromHex("#888888"),
         feedback: {
           success: { base: color },
           error: { base: color },
