@@ -4,6 +4,162 @@ import { createSignal } from "solid-js"
 import { contextFixture, session } from "../test/context"
 import { Sidebar } from "./tui"
 
+async function clickText(
+  screen: Awaited<ReturnType<typeof testRender>>,
+  text: string,
+) {
+  const frame = await screen.waitForFrame((frame) => frame.includes(text))
+  const lines = frame.split("\n")
+  const y = lines.findIndex((line) => line.includes(text))
+  await screen.mockMouse.click((lines[y]?.indexOf(text) ?? 0) + 1, y)
+}
+
+test("All defaults to complete history; Active filters locally and keeps narrow Unicode navigation", async () => {
+  const running = {
+    ...session("running", "root"),
+    title: "Исследование 界界 👩‍💻".repeat(8),
+  }
+  const f = contextFixture([
+    session("root"),
+    running,
+    { ...session("finished", "root"), title: "History", outcome: "succeeded" },
+  ])
+  let reads = 0
+  const get = f.sessionAPI.get
+  const list = f.sessionAPI.list
+  f.sessionAPI.get = (input) => {
+    reads++
+    return get(input)
+  }
+  f.sessionAPI.list = (input) => {
+    reads++
+    return list(input)
+  }
+  f.sessionAPI.active = async () => {
+    reads++
+    return { running: { type: "running" } }
+  }
+  await using screen = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 10 },
+  )
+  await clickText(screen, "▶ Subagents")
+  const all = await screen.waitForFrame((frame) => frame.includes("[All (2)]"))
+  expect(all).toContain("History")
+  expect(all).toContain("Active (1)")
+  const loadedReads = reads
+  await clickText(screen, "Active (1)")
+  const active = await screen.waitForFrame((frame) =>
+    frame.includes("[Active (1)]"),
+  )
+  expect(active).toContain("Subagents · 2")
+  expect(active).toContain("Running")
+  expect(active).not.toContain("History")
+  expect(screen.renderer.root.getChildren()[0]?.width).toBeLessThanOrEqual(28)
+  await screen.mockMouse.click(
+    2,
+    active.split("\n").findIndex((line) => line.includes("Running")),
+  )
+  expect(f.routes).toEqual([{ type: "session", sessionID: "running" }])
+  await clickText(screen, "All (2)")
+  expect(
+    await screen.waitForFrame((frame) => frame.includes("[All (2)]")),
+  ).toContain("History")
+  expect(reads).toBe(loadedReads)
+})
+
+test("Active stays synchronized while collapsed and restores completed tasks through All", async () => {
+  const child = { ...session("child", "root"), title: "Work" }
+  const f = contextFixture([session("root"), child])
+  f.sessionAPI.active = async () => ({ child: { type: "running" } })
+  await using screen = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 10 },
+  )
+  await clickText(screen, "▶ Subagents")
+  await clickText(screen, "Active (1)")
+  await screen.waitForFrame((frame) => frame.includes("[Active (1)]"))
+  await clickText(screen, "▼ Subagents")
+  f.records[1] = { ...child, outcome: "succeeded" }
+  f.sessionAPI.active = async () => ({})
+  f.emit({
+    id: "completed",
+    created: 1,
+    type: "session.execution.succeeded",
+    durable: { aggregateID: "child", seq: 1, version: 1 },
+    data: { sessionID: "child" },
+  })
+  const collapsed = await screen.waitForFrame(
+    (frame) => frame.includes("▶ Subagents · 1") && !frame.includes("running"),
+  )
+  expect(collapsed).not.toContain("Work")
+  await clickText(screen, "▶ Subagents")
+  const empty = await screen.waitForFrame((frame) =>
+    frame.includes("No active subagents"),
+  )
+  expect(empty).toContain("[Active (0)]")
+  expect(empty).toContain("All (1)")
+  await clickText(screen, "All (1)")
+  const restored = await screen.waitForFrame((frame) => frame.includes("Work"))
+  expect(restored).toContain("Done")
+  await clickText(screen, "Active (0)")
+  f.sessionAPI.active = async () => ({ child: { type: "running" } })
+  f.emit({
+    id: "rerun",
+    created: 2,
+    type: "session.execution.started",
+    durable: { aggregateID: "child", seq: 2, version: 1 },
+    data: { sessionID: "child" },
+  })
+  expect(
+    await screen.waitForFrame((frame) => frame.includes("Running")),
+  ).toContain("[Active (1)]")
+})
+
+test("Active preference survives root changes and remounts, but is isolated by context", async () => {
+  const f = contextFixture([
+    session("root"),
+    session("child", "root"),
+    session("empty"),
+  ])
+  const [id, setId] = createSignal("root")
+  const screen = await testRender(
+    () => <Sidebar context={f.context} sessionID={id()} />,
+    { width: 28, height: 10 },
+  )
+  try {
+    await clickText(screen, "▶ Subagents")
+    await clickText(screen, "Active (0)")
+    await screen.waitForFrame((frame) => frame.includes("No active subagents"))
+    setId("empty")
+    const empty = await screen.waitForFrame((frame) =>
+      frame.includes("No subagents"),
+    )
+    expect(empty).toContain("[Active (0)]")
+    expect(empty).toContain("All (0)")
+  } finally {
+    await screen.dispose()
+  }
+  await using remount = await testRender(
+    () => <Sidebar context={f.context} sessionID="root" />,
+    { width: 28, height: 10 },
+  )
+  expect(
+    await remount.waitForFrame((frame) =>
+      frame.includes("No active subagents"),
+    ),
+  ).toContain("[Active (0)]")
+  const fresh = contextFixture()
+  await using reset = await testRender(
+    () => <Sidebar context={fresh.context} sessionID="root" />,
+    { width: 28, height: 10 },
+  )
+  await clickText(reset, "▶ Subagents")
+  expect(
+    await reset.waitForFrame((frame) => frame.includes("[All (1)]")),
+  ).toContain("child")
+})
+
 test("renders restored rows, keeps Unicode titles inside 28 columns, navigates on click", async () => {
   const f = contextFixture()
   const child = f.records[1]

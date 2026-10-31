@@ -2,6 +2,7 @@ import { Plugin } from "@opencode/plugin/tui"
 import type { JSX } from "@opentui/solid"
 import {
   createEffect,
+  createMemo,
   createSignal,
   For,
   Match,
@@ -14,21 +15,36 @@ import { createController, type View } from "./controller"
 import type { Row } from "./model"
 import { createOpenCodeSource } from "./opencode-source"
 
-// One preference per plugin context, surviving sidebar unmounts and navigation.
+// Preferences survive sidebar unmounts and navigation within a plugin context.
 // Weak keys release the state when OpenCode unloads the plugin context.
-const expandedPreferences = new WeakMap<Plugin.Context, Signal<boolean>>()
+type Filter = "all" | "active"
+const preferences = new WeakMap<
+  Plugin.Context,
+  {
+    expanded: Signal<boolean>
+    filter: Signal<Filter>
+  }
+>()
 
 export function Sidebar(props: {
   context: Plugin.Context
   sessionID: string
 }): JSX.Element {
-  let preference = expandedPreferences.get(props.context)
+  let preference = preferences.get(props.context)
   if (!preference) {
-    preference = createSignal(false)
-    expandedPreferences.set(props.context, preference)
+    preference = {
+      expanded: createSignal(false),
+      filter: createSignal<Filter>("all"),
+    }
+    preferences.set(props.context, preference)
   }
-  const [expanded, setExpanded] = preference
+  const [expanded, setExpanded] = preference.expanded
+  const [filter, setFilter] = preference.filter
   const [view, setView] = createSignal<View>({ phase: "loading", rows: [] })
+  const activeRows = createMemo(() => view().rows.filter((row) => row.active))
+  const visibleRows = createMemo(() =>
+    filter() === "active" ? activeRows() : view().rows,
+  )
   const controller = createController(
     createOpenCodeSource(props.context),
     setView,
@@ -64,7 +80,7 @@ export function Sidebar(props: {
       >
         <b>{expanded() ? "▼" : "▶"} Subagents</b>
         {view().phase === "ready"
-          ? ` · ${view().rows.length}${!expanded() && view().rows.some((row) => row.active) ? ` · ${view().rows.filter((row) => row.active).length} running` : ""}`
+          ? ` · ${view().rows.length}${!expanded() && activeRows().length ? ` · ${activeRows().length} running` : ""}`
           : view().phase === "loading"
             ? " · Loading…"
             : " · Error"}
@@ -88,10 +104,34 @@ export function Sidebar(props: {
             </text>
           </Match>
           <Match when={view().phase === "ready"}>
+            <box flexDirection="row" gap={1} width="100%" height={1}>
+              <For each={["all", "active"] as const}>
+                {(mode) => (
+                  <text
+                    fg={
+                      filter() === mode
+                        ? props.context.theme.text.base
+                        : props.context.theme.text.muted
+                    }
+                    wrapMode="none"
+                    truncate
+                    onMouseUp={(event) => {
+                      if (event.button === 0) setFilter(mode)
+                    }}
+                  >
+                    {`${filter() === mode ? "[" : ""}${mode === "all" ? "All" : "Active"} (${mode === "all" ? view().rows.length : activeRows().length})${filter() === mode ? "]" : ""}`}
+                  </text>
+                )}
+              </For>
+            </box>
             <For
-              each={view().rows}
+              each={visibleRows()}
               fallback={
-                <text fg={props.context.theme.text.muted}>No subagents</text>
+                <text fg={props.context.theme.text.muted}>
+                  {filter() === "active" && view().rows.length
+                    ? "No active subagents"
+                    : "No subagents"}
+                </text>
               }
             >
               {(row) => (
