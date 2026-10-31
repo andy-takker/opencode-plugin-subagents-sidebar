@@ -40,6 +40,9 @@ loads without a resolved root, unknown deletions, lookup failures and cyclic
 ancestry conservatively trigger a full refresh. Reconnect and explicit Retry
 always reload the complete tree. A relevant event still invalidates in-flight
 snapshots; a confirmed unrelated event does not. No background polling is used.
+Before publishing, newly discovered ancestry is checked against queued events.
+A matching event invalidates that snapshot once, even if its point lookup is
+still pending, so an older successful outcome cannot flash before reconciliation.
 
 The request-count regression uses 100 events for an unknown unrelated child:
 two metadata reads establish its root, with zero tree/status reloads. A second

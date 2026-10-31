@@ -96,8 +96,9 @@ export function createController(
         } catch {
           // Unknown ancestry is not proof that an event can be discarded.
         }
-        state.pending.delete(id)
-        if (!disposed && scope === state && relevant) void refresh()
+        const unhandled = state.pending.delete(id)
+        if (!disposed && scope === state && unhandled && relevant)
+          void refresh()
       }
     } finally {
       resolving = false
@@ -165,6 +166,20 @@ export function createController(
       if (rejection?.status === "rejected") throw rejection.reason
     }
     if (!valid()) return
+    // A lifecycle event may have arrived before its child was discovered. Do
+    // not publish that pre-event page while a slower point lookup is pending.
+    // Consume it once so the retry can proceed without waiting for the lookup.
+    let discoveredEvent = false
+    for (const id of state.pending) {
+      if (membership(id, state) === true) {
+        state.pending.delete(id)
+        discoveredEvent = true
+      }
+    }
+    if (discoveredEvent) {
+      void refresh()
+      return
+    }
     const statuses = await source.statuses([...sessions.keys()])
     if (!valid()) return
     for (const id of deleted) sessions.delete(id)

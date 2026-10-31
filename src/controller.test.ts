@@ -177,13 +177,13 @@ test("unknown lookup work is bounded, deduplicated and discarded on root switch"
     f.emit({ kind: "refresh", id: `unknown-${i % 10}` })
   expect(lookups).toBeGreaterThan(0)
   await entered.promise
-  expect(peak).toBeLessThanOrEqual(4)
+  expect(peak).toBe(1)
   await f.controller.select("b")
   const reads = f.calls.children
   pending.resolve(session("unknown-0", "root"))
   await settleEvents()
   expect(f.calls.children).toBe(reads)
-  expect(lookups).toBeLessThanOrEqual(4)
+  expect(lookups).toBe(1)
   expect(f.last()?.rows.map((row) => row.id)).toEqual(["b-child"])
   f.controller.dispose()
 })
@@ -277,6 +277,91 @@ test("cyclic unknown ancestry falls back to a tree refresh without looping", asy
   expect(f.last()?.rows.map((row) => row.id)).toEqual(["missed"])
   expect(f.calls.get.filter((id) => id === "a")).toHaveLength(1)
   expect(f.calls.get.filter((id) => id === "b")).toHaveLength(1)
+  f.controller.dispose()
+})
+
+test("a pending event for a newly discovered child rejects stale success before ancestry lookup completes", async () => {
+  const oldChild = {
+    ...session("child", "root"),
+    outcome: "succeeded" as const,
+  }
+  const failedChild = { ...oldChild, outcome: "failed" as const }
+  const f = fixture([session("root"), oldChild])
+  const page = deferred<{ data: SessionRecord[] }>()
+  const pageEntered = deferred<void>()
+  const lookup = deferred<SessionRecord>()
+  const lookupEntered = deferred<void>()
+  const get = f.source.get
+  const children = f.source.children
+  f.source.get = (id) => {
+    if (id !== "child") return get(id)
+    lookupEntered.resolve()
+    return lookup.promise
+  }
+  f.source.children = () => {
+    f.source.children = children
+    pageEntered.resolve()
+    return page.promise
+  }
+  try {
+    const load = f.controller.select("root")
+    await pageEntered.promise
+    f.records[1] = failedChild
+    f.emit({ kind: "refresh", id: "child" })
+    await lookupEntered.promise
+    page.resolve({ data: [oldChild] })
+    await load
+    expect(
+      f.views.flatMap((view) => view.rows.map((row) => row.status)),
+    ).not.toContain("Done")
+    expect(f.last()?.rows[0]?.status).toBe("Error")
+    const reads = f.calls.children
+    lookup.resolve(failedChild)
+    await settleEvents()
+    expect(f.calls.children).toBe(reads)
+  } finally {
+    lookup.resolve(failedChild)
+    f.controller.dispose()
+  }
+})
+
+test("distinct unrelated lookups drain serially without tree reloads", async () => {
+  const f = fixture()
+  await f.controller.select("root")
+  const reads = f.calls.children
+  const gates = [
+    deferred<SessionRecord>(),
+    deferred<SessionRecord>(),
+    deferred<SessionRecord>(),
+  ]
+  const requests: string[] = []
+  let active = 0
+  let peak = 0
+  f.source.get = async (id) => {
+    const gate = gates[requests.length]
+    if (!gate) throw new Error("Unexpected extra lookup")
+    requests.push(id)
+    active++
+    peak = Math.max(peak, active)
+    try {
+      return await gate.promise
+    } finally {
+      active--
+    }
+  }
+  for (const id of ["a", "b", "a", "c", "b"]) f.emit({ kind: "refresh", id })
+  expect(requests).toEqual(["a"])
+  gates[0]?.resolve(session("a"))
+  await settleEvents()
+  expect(requests).toEqual(["a", "b"])
+  gates[1]?.resolve(session("b"))
+  await settleEvents()
+  expect(requests).toEqual(["a", "b", "c"])
+  gates[2]?.resolve(session("c"))
+  await settleEvents()
+  expect(active).toBe(0)
+  expect(peak).toBe(1)
+  expect(f.calls.children).toBe(reads)
   f.controller.dispose()
 })
 
