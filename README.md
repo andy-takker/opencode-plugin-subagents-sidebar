@@ -147,6 +147,27 @@ unmount and makes no server requests. Visible rows share status and duration
 column widths: statuses align left, durations align right, and long titles
 truncate. This feature is not in v0.1.0.
 
+### Keyboard navigation (unreleased)
+
+Run `/subagents`, or choose **Open subagent** in OpenCode's command palette.
+No default keyboard shortcut is installed. The command is available in a
+session, including when the sidebar is hidden or collapsed.
+
+- Type to search task titles (case-insensitive substring matching).
+- Use **↑/↓** to select, **Enter** to open, and **Esc** to cancel.
+- The chooser includes the entire current root's descendant tree, regardless
+  of the sidebar's Active/All filter. It shows bounded tree connectors, live
+  statuses, and execution durations; searching may hide a matching task's parent.
+- Loading, empty trees, no matches, and request failures have distinct messages.
+  Press Enter to retry a load failure. Sessions are rechecked before navigation;
+  a failed check keeps the chooser open. If a selected task disappears, use the
+  arrows or search to choose another task rather than opening its replacement.
+- Events refresh the open chooser. If the list changes during the final read,
+  select again. Changing the originating session or replacing/closing the dialog
+  cancels pending navigation and releases its subscriptions and local clock.
+
+This feature is not included in the `v0.1.0` archive or demo above.
+
 ## Installation
 
 Tested with **OpenCode V2 2.2.5**. CI runs on Linux and macOS; see the

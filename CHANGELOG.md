@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add the **Open subagent** command and `/subagents` for searchable, keyboard-only
+  navigation through the current session tree, with live state and guarded opening.
+
 - Group nested subagents into an active-subtree-first tree with bounded `tree`-style
   connectors. Active retains muted, separately counted ancestors for context.
 
