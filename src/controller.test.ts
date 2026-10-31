@@ -185,3 +185,74 @@ test("tree reads have bounded concurrency", async () => {
   expect(f.last()?.rows).toHaveLength(20)
   f.controller.dispose()
 })
+
+test.each(["failed", "running"] as const)(
+  "never publishes an invalidated successful snapshot after %s",
+  async (latest) => {
+    const f = fixture()
+    f.records[1] = { ...session("child", "root"), outcome: "succeeded" }
+    f.status.set("child", "running")
+    await f.controller.select("root")
+    const entered = deferred<void>()
+    const pending = deferred<ReadonlyMap<string, LiveStatus>>()
+    const statuses = f.source.statuses
+    f.source.statuses = () => {
+      f.source.statuses = statuses
+      entered.resolve()
+      return pending.promise
+    }
+    const refresh = f.controller.refresh()
+    await entered.promise
+    f.records[1] = { ...session("child", "root"), outcome: "failed" }
+    f.status.set("child", latest === "running" ? "running" : "idle")
+    f.emit({ kind: "refresh", id: "child" })
+    pending.resolve(new Map([["child", "idle"]]))
+    await refresh
+    expect(
+      f.views.flatMap((view) => view.rows.map((row) => row.status)),
+    ).not.toContain("Done")
+    expect(f.last()?.rows[0]?.status).toBe(
+      latest === "running" ? "Running" : "Error",
+    )
+    f.controller.dispose()
+  },
+)
+
+test("failed batches drain pending siblings before reconciliation", async () => {
+  const f = fixture([
+    session("root"),
+    ...Array.from({ length: 4 }, (_, i) => session(`c${i}`, "root")),
+  ])
+  const children = f.source.children
+  const entered = deferred<void>()
+  const pending = Array.from({ length: 4 }, () => deferred<void>())
+  let calls = 0
+  let active = 0
+  let peak = 0
+  f.source.children = async (id, cursor) => {
+    active++
+    peak = Math.max(peak, active)
+    try {
+      if (id !== "root" && calls < 4) {
+        const gate = pending[calls++]
+        if (calls === 4) entered.resolve()
+        await gate?.promise
+      }
+      return await children(id, cursor)
+    } finally {
+      active--
+    }
+  }
+  const load = f.controller.select("root")
+  await entered.promise
+  f.emit({ kind: "refresh", id: "child" })
+  pending[0]?.reject(new Error("offline"))
+  // Drain microtasks so a faulty early-rejection refresh can start its next batch.
+  for (let i = 0; i < 30; i++) await Promise.resolve()
+  for (const gate of pending.slice(1)) gate.resolve()
+  await load
+  expect(peak).toBeLessThanOrEqual(4)
+  expect(active).toBe(0)
+  expect(f.last()?.rows).toHaveLength(4)
+  f.controller.dispose()
+})

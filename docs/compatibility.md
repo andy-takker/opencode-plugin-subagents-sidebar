@@ -29,6 +29,9 @@ child-session viewer. The global local-path configuration was also checked besid
 the existing Orca TUI plugin. No resolver/renderer error was observed in these
 screens; the package relied on host-provided runtime modules.
 
+A newly launched review subagent appeared automatically as Running and changed
+to Done after completion in the global-config terminal.
+
 Lifecycle transitions, reconnect, deletion races, narrow Unicode layout and
 dispose are covered automatically. Interactive failure/interruption and real
 network reconnection have not been exercised; do not treat unit tests as those

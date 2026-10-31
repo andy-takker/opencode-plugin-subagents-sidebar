@@ -34,8 +34,10 @@ export function createController(
     | undefined
   const deleted = new Set<string>()
 
-  async function load(id: string, current: number) {
-    const valid = () => !disposed && generation === current
+  async function load(id: string, current: number, invalidated: () => boolean) {
+    let failed = false
+    const valid = () =>
+      !disposed && generation === current && !failed && !invalidated()
     let root = await source.get(id)
     const ancestors = new Set([id])
     while (root.parentID && valid()) {
@@ -49,31 +51,41 @@ export function createController(
     const queue = [root.id]
     // A bounded breadth-first queue avoids unbounded Promise.all on wide trees.
     while (queue.length && valid()) {
-      await Promise.all(
-        queue.splice(0, 4).map(async (parentID) => {
-          let cursor: string | undefined
-          const cursors = new Set<string>()
-          do {
-            if (!valid() || deleted.has(parentID)) return
-            const page = await source.children(parentID, cursor)
-            if (!valid()) return
-            for (const child of page.data) {
-              if (
-                child.parentID !== parentID ||
-                deleted.has(child.id) ||
-                sessions.has(child.id)
-              )
-                continue
-              sessions.set(child.id, child)
-              queue.push(child.id)
-            }
-            cursor = page.next ?? undefined
-            if (cursor && cursors.has(cursor))
-              throw new Error("Repeated session cursor")
-            if (cursor) cursors.add(cursor)
-          } while (cursor)
-        }),
+      const batch = await Promise.allSettled(
+        queue
+          .splice(0, 4)
+          .map(async (parentID) => {
+            let cursor: string | undefined
+            const cursors = new Set<string>()
+            do {
+              if (!valid() || deleted.has(parentID)) return
+              const page = await source.children(parentID, cursor)
+              if (!valid()) return
+              for (const child of page.data) {
+                if (
+                  child.parentID !== parentID ||
+                  deleted.has(child.id) ||
+                  sessions.has(child.id)
+                )
+                  continue
+                sessions.set(child.id, child)
+                queue.push(child.id)
+              }
+              cursor = page.next ?? undefined
+              if (cursor && cursors.has(cursor))
+                throw new Error("Repeated session cursor")
+              if (cursor) cursors.add(cursor)
+            } while (cursor)
+          })
+          .map((worker) =>
+            worker.catch((error: unknown) => {
+              failed = true
+              throw error
+            }),
+          ),
       )
+      const rejection = batch.find((result) => result.status === "rejected")
+      if (rejection?.status === "rejected") throw rejection.reason
     }
     if (!valid()) return
     const statuses = await source.statuses([...sessions.keys()])
@@ -104,9 +116,9 @@ export function createController(
       do {
         next.dirty = false
         try {
-          await load(id, current)
+          await load(id, current, () => next.dirty)
         } catch {
-          if (!disposed && current === generation) {
+          if (!disposed && current === generation && !next.dirty) {
             publish({
               phase: "error",
               rows: [],
