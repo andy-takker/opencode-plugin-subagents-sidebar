@@ -2,6 +2,9 @@
 
 ## Unreleased
 
+- Add an All/Active filter with live counts, All by default, and a per-context
+  preference. Active shows Running tasks; history remains available through All.
+
 - Ignore confirmed unrelated session events without reloading the visible tree.
   Resolve unknown ancestry with bounded, deduplicated metadata reads while
   preserving new-child discovery and full reconnect recovery.

@@ -47,6 +47,30 @@ Research API            Done
 - Text statuses: `Running`, `Done`, `Error`, `Interrupted`, `Idle`, `Unknown`.
   Idle does not imply success.
 
+### Active/All filter (unreleased)
+
+The development branch includes a filter beneath the expanded header:
+
+```text
+▼ Subagents · 5
+All (5) [Active (2)]
+Research API         Running
+Review changes       Running
+```
+
+Click **All** to show the complete history (the default), or **Active** to show
+only `Running` tasks. Brackets mark the selected mode. The header always counts
+all subagents; each filter shows its matching count, so the selected count is
+the number of visible rows. Tasks disappear from Active when they stop running
+and remain accessible through All. No active tasks shows `No active subagents`;
+a completely empty tree shows `No subagents` in either mode.
+
+Filtering is local and never pauses synchronization, including while collapsed.
+The choice survives session/root navigation and sidebar remounts in the same
+plugin context; restarting OpenCode or reloading the plugin resets it to All.
+Waiting-for-user states are not classified as Active yet. This feature is not in
+the v0.1.0 release archive or demo above.
+
 ## Installation
 
 Tested with **OpenCode V2 2.2.5**. CI runs on Linux and macOS; see the

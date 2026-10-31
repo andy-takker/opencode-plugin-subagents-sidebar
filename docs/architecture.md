@@ -6,6 +6,16 @@ expanding an error reveals Retry. A weakly keyed per-plugin-context Solid signal
 retains the expansion preference across component unmounts without persisting it
 across OpenCode restarts or plugin reloads. Collapsing does not stop synchronization.
 
+The same weakly keyed preference record stores the All/Active filter, defaulting
+to All. The expanded ready state offers textual, clickable selectors with counts
+and brackets around the selected mode. A memo derives Active from `Row.active`
+(currently Running only); another selects visible rows without changing their
+order or the controller's complete snapshot. Changing filters performs no API
+reads. The header remains a total count, while the selected filter's count equals
+the visible row count. Empty Active and an empty tree have distinct messages;
+loading/error states take precedence over either. Filtering does not affect
+synchronization, click targets or the retained session history.
+
 The package exports only `./tui`, as TSX. OpenCode compiles it and provides the
 shared Solid/OpenTUI runtime. There is no server plugin or bundled renderer.
 
