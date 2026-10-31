@@ -123,3 +123,8 @@ change and cleans up its interval before replacement or unmount. No network
 operation occurs on a tick. Rows hold timestamps, not accumulated elapsed values,
 so navigation and reconnect do not reset the clock. Tests control the clock at
 the runtime boundary while keeping real OpenTUI rendering and frame scheduling.
+
+Visible rows share separate status and duration columns, sized to their longest
+current labels. Statuses align left and durations right; only titles shrink and
+truncate. Column widths react to filtering, snapshots and clock ticks without
+issuing requests or restarting the display clock.

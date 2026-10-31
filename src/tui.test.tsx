@@ -15,6 +15,78 @@ async function clickText(
   await screen.mockMouse.click((lines[y]?.indexOf(text) ?? 0) + 1, y)
 }
 
+test.each([28, 40])(
+  "status columns align across durations and clock ticks at width %d",
+  async (width) => {
+    using clock = displayClock(1_000_000)
+    const records = [
+      {
+        ...session("short", "root"),
+        outcome: "succeeded" as const,
+        time: { created: 1, updated: 1, busy: 1, idle: 25_001 },
+      },
+      {
+        ...session("long", "root"),
+        outcome: "succeeded" as const,
+        time: { created: 2, updated: 2, busy: 1, idle: 217_001 },
+      },
+      {
+        ...session("stopped", "root"),
+        outcome: "interrupted" as const,
+        time: { created: 3, updated: 3, busy: 1, idle: 60_001 },
+      },
+      {
+        ...session("live", "root"),
+        time: { created: 4, updated: 4, busy: 941_000 },
+      },
+      session("pending", "root"),
+    ]
+    const f = contextFixture([session("root"), ...records])
+    f.sessionAPI.active = async () => ({ live: { type: "running" } })
+    f.forms.push(form("pending"))
+    await using screen = await testRender(
+      () => <Sidebar context={f.context} sessionID="root" />,
+      { width, height: 12 },
+    )
+    await clickText(screen, "▶ Subagents")
+    const assertColumns = (frame: string) => {
+      const lines = frame
+        .split("\n")
+        .filter((line) =>
+          /(?:Done|Interrupted|Running|Waiting)\s+\S+\s*$/.test(line),
+        )
+      expect(lines).toHaveLength(5)
+      expect(
+        new Set(
+          lines.map((line) => line.search(/Done|Interrupted|Running|Waiting/)),
+        ).size,
+      ).toBe(1)
+      expect(new Set(lines.map((line) => line.trimEnd().length))).toEqual(
+        new Set([width]),
+      )
+      for (const duration of ["25s", "3m37s", "1m00s", "—"])
+        expect(lines.some((line) => line.trimEnd().endsWith(duration))).toBe(
+          true,
+        )
+      return lines
+    }
+    const frame = await screen.waitForFrame(
+      (frame) => frame.includes("59s") && frame.includes("Interrupted"),
+    )
+    assertColumns(frame)
+    const reads = [f.requests.length, f.attentionRequests.length]
+    clock.advance(1_000)
+    assertColumns(
+      await screen.waitForFrame((frame) => /Running\s+1m00s/.test(frame)),
+    )
+    expect([f.requests.length, f.attentionRequests.length]).toEqual(reads)
+    const lines = screen.captureCharFrame().split("\n")
+    const y = lines.findIndex((line) => line.includes("Interrupted"))
+    await screen.mockMouse.click(lines[y]?.indexOf("Interrupted") ?? 0, y)
+    expect(f.routes).toEqual([{ type: "session", sessionID: "stopped" }])
+  },
+)
+
 test("execution clock ticks locally only while visible, freezes on completion and resets on rerun", async () => {
   using clock = displayClock(10_000)
   const child = {

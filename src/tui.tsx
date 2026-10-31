@@ -64,6 +64,15 @@ export function Sidebar(props: {
     filter() === "active" ? activeRows() : view().rows,
   )
   const [now, setNow] = createSignal(Date.now())
+  const columnWidths = createMemo(() => {
+    let status = 0
+    let duration = 0
+    for (const row of visibleRows()) {
+      status = Math.max(status, row.status.length)
+      duration = Math.max(duration, formatDuration(row.duration, now()).length)
+    }
+    return { status, duration }
+  })
   createEffect(() => {
     if (!expanded() || view().phase !== "ready") return
     const rows = visibleRows()
@@ -202,8 +211,22 @@ export function Sidebar(props: {
                   >
                     {row.title.replace(/[\r\n\t]/g, " ")}
                   </text>
-                  <text flexShrink={0} wrapMode="none" fg={color(row)}>
-                    {row.status} {formatDuration(row.duration, now())}
+                  <text
+                    width={columnWidths().status}
+                    flexShrink={0}
+                    wrapMode="none"
+                    fg={color(row)}
+                  >
+                    {row.status}
+                  </text>
+                  <text
+                    width={columnWidths().duration}
+                    flexShrink={0}
+                    textAlign="right"
+                    wrapMode="none"
+                    fg={color(row)}
+                  >
+                    {formatDuration(row.duration, now())}
                   </text>
                 </box>
               )}
