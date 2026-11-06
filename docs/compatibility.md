@@ -3,11 +3,11 @@
 Initial target: OpenCode **2.2.5**, `@opencode/plugin` **2.2.5**,
 OpenTUI **0.8.0**, Solid **1.9.17**, Bun **1.3.13**.
 
-| Environment | Automated tests                                  | Packed OpenCode runtime                                                 |
-| ----------- | ------------------------------------------------ | ----------------------------------------------------------------------- |
-| macOS arm64 | Passed locally, including a clean frozen install | Loaded in OpenCode 2.2.5 from an extracted archive outside the checkout |
-| Linux       | Passed in GitHub Actions                         | Not verified                                                            |
-| Windows     | Not verified                                     | Not verified                                                            |
+| Environment | Automated tests                                  | Packed OpenCode runtime                                                                                 |
+| ----------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
+| macOS arm64 | Passed locally, including a clean frozen install | Loaded in OpenCode 2.2.5 from extracted archives and npm name `opencode-plugin-subagents-sidebar@0.2.1` |
+| Linux       | Passed in GitHub Actions                         | Not verified                                                                                            |
+| Windows     | Not verified                                     | Not verified                                                                                            |
 
 Do not infer support for future OpenCode releases from peer ranges. The peers
 describe the development/runtime contract, not a guarantee of host API stability.
@@ -98,5 +98,16 @@ one working section. Switching to an empty root and back restored counts from
 twelve to zero to twelve. A recent CLI log-tail check found zero error entries
 referencing this package. The global configuration was not changed.
 
-Loading the exact published npm name still requires a post-publication check;
-the prepublication archive test is not a registry-install claim.
+### Post-publication npm verification
+
+The published `opencode-plugin-subagents-sidebar@0.2.1` was then loaded by its
+exact npm name in a separate OpenCode 2.2.5 terminal on macOS arm64, using inline
+configuration without changing the user's global settings. The section restored
+twelve subagents; expanding it showed the real nested tree, aligned statuses and
+durations, and `/subagents` opened the chooser.
+
+The downloaded registry tarball was byte-identical to the checked GitHub release
+archive, with SHA-256
+`5d41a8d2a087a3f892133096292bd26b314c66923b879f08152745492fe0d5e5`.
+This closes the npm-name loading check for 0.2.1 on that host/platform; it does not
+establish Linux host runtime, Windows, or future OpenCode version compatibility.
