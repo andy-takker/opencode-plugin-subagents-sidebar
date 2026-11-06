@@ -3,11 +3,11 @@
 Initial target: OpenCode **2.2.5**, `@opencode/plugin` **2.2.5**,
 OpenTUI **0.8.0**, Solid **1.9.17**, Bun **1.3.13**.
 
-| Environment | Automated tests                                  | Packed OpenCode runtime                                                                                 |
-| ----------- | ------------------------------------------------ | ------------------------------------------------------------------------------------------------------- |
-| macOS arm64 | Passed locally, including a clean frozen install | Loaded in OpenCode 2.2.5 from extracted archives and npm name `opencode-plugin-subagents-sidebar@0.2.1` |
-| Linux       | Passed in GitHub Actions                         | Not verified                                                                                            |
-| Windows     | Not verified                                     | Not verified                                                                                            |
+| Environment | Automated tests                                  | Packed OpenCode runtime                                                                                   |
+| ----------- | ------------------------------------------------ | --------------------------------------------------------------------------------------------------------- |
+| macOS arm64 | Passed locally, including a clean frozen install | Loaded in OpenCode 2.2.5 from extracted archives and npm name `opencode-plugin-subagents-sidebar@0.2.1`   |
+| Linux       | Passed in GitHub Actions                         | npm 0.2.1 loaded in OpenCode 2.2.5 on Debian 12 arm64 in Docker; other Linux host environments unverified |
+| Windows     | Not verified                                     | Not verified                                                                                              |
 
 Do not infer support for future OpenCode releases from peer ranges. The peers
 describe the development/runtime contract, not a guarantee of host API stability.
@@ -111,3 +111,36 @@ archive, with SHA-256
 `5d41a8d2a087a3f892133096292bd26b314c66923b879f08152745492fe0d5e5`.
 This closes the npm-name loading check for 0.2.1 on that host/platform; it does not
 establish Linux host runtime, Windows, or future OpenCode version compatibility.
+
+## 2026-11-06 Linux arm64 npm verification
+
+OpenCode **2.2.5** loaded `opencode-plugin-subagents-sidebar@0.2.1` by npm name
+in an isolated **Debian 12.15 arm64 (aarch64)** container on Docker Desktop.
+The official Linux arm64 OpenCode archive was checked against its release
+`SHA256SUMS`. The container had no host directory mounts, imported credentials,
+or published ports. Its own service and purpose-built sessions supplied the
+data; this was an actual host check, not a mocked renderer test.
+
+Observed in a 180-column tmux terminal:
+
+- The collapsed section counted two descendants. Expanding it displayed a
+  parent and nested child with a `└─` connector and aligned status/duration columns.
+- Creating a pending boolean form through the public API on the nested session
+  produced `Waiting` and an active count of one. Cancelling that form cleared
+  Waiting and restored `Idle` with an active count of zero.
+- A prompt using the host's included free model changed the parent to `Running`
+  with a live duration, then to `Done` with a frozen duration. A repeated run
+  displayed `Running 5s`, then `Done 10s`, replacing the earlier `Done 12s`.
+- `/subagents` opened the chooser. Searching for the nested task and pressing
+  Enter opened the native child-session viewer; Escape returned to the sidebar.
+- `/reload` retained one working section, the nested tree and completed duration.
+- The container's CLI log contained no `plugin operation failed` entries or
+  error entries mentioning `subagents-sidebar` or `dist/tui`. This is a targeted
+  plugin-loading check, not a claim that every host log was error-free.
+
+The form was created and cancelled through the API, not answered by a human in
+the host UI. Permission approval, interruption, network reconnect, coexistence
+with other plugins and narrow terminal behavior were not manually exercised in
+this Linux probe. Existing automated tests remain separate evidence. This check
+does not establish native Linux desktop, x86_64, musl, Windows or newer OpenCode
+runtime compatibility. The user's macOS configuration and sessions were untouched.
