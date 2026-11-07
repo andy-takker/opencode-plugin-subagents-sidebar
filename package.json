@@ -66,10 +66,10 @@
     "@biomejs/biome": "2.6.4",
     "@opencode/client": "2.2.5",
     "@opencode/theme": "2.2.5",
-    "@opentui/core": "0.8.0",
-    "@opentui/solid": "0.8.0",
+    "@opentui/core": "0.8.2",
+    "@opentui/solid": "0.8.2",
     "@types/bun": "1.4.4",
-    "solid-js": "1.9.17",
+    "solid-js": "1.9.18",
     "typescript": "7.0.2"
   }
 }
